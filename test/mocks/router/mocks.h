@@ -162,6 +162,22 @@ public:
   MOCK_METHOD(bool, isCrossSchemeRedirectAllowed, (), (const));
 };
 
+#if defined(ALIMESH)
+class MockInternalActiveRedirectPolicy : public InternalActiveRedirectPolicy {
+public:
+  MockInternalActiveRedirectPolicy();
+  MOCK_METHOD(bool, enabled, (), (const));
+  MOCK_METHOD(bool, shouldRedirectForResponseCode, (const Http::Code& response_code), (const));
+  MOCK_METHOD(std::vector<InternalRedirectPredicateSharedPtr>, predicates, (), (const));
+  MOCK_METHOD(uint32_t, maxInternalRedirects, (), (const));
+  MOCK_METHOD(bool, isCrossSchemeRedirectAllowed, (), (const));
+  MOCK_METHOD(void, evaluateHeaders, (Http::HeaderMap&, const StreamInfo::StreamInfo*), (const));
+  MOCK_METHOD(std::string, redirectUrl, (absl::optional<std::string>), (const));
+  MOCK_METHOD(bool, forcedUseOriginalHost, (), (const));
+  MOCK_METHOD(bool, forcedAddHeaderBeforeRouteMatcher, (), (const));
+};
+#endif
+
 class MockInternalRedirectPredicate : public InternalRedirectPredicate {
 public:
   MOCK_METHOD(bool, acceptTargetRoute, (StreamInfo::FilterState&, absl::string_view, bool, bool));
@@ -440,6 +456,10 @@ public:
   MOCK_METHOD(const EarlyDataPolicy&, earlyDataPolicy, (), (const));
   MOCK_METHOD(const RouteStatsContextOptRef, routeStatsContext, (), (const));
 
+#if defined(ALIMESH)
+  MOCK_METHOD(const InternalActiveRedirectPolicy&, internalActiveRedirectPolicy, (), (const));
+#endif
+
   std::string cluster_name_{"fake_cluster"};
   std::string route_name_{"fake_route_name"};
   std::multimap<std::string, std::string> opaque_config_;
@@ -459,6 +479,10 @@ public:
   testing::NiceMock<MockPathMatchCriterion> path_match_criterion_;
   UpgradeMap upgrade_map_;
   absl::optional<ConnectConfig> connect_config_;
+
+#if defined(ALIMESH)
+  testing::NiceMock<MockInternalActiveRedirectPolicy> internal_active_redirect_policy_;
+#endif
   testing::NiceMock<MockEarlyDataPolicy> early_data_policy_;
 };
 
@@ -591,6 +615,12 @@ public:
 
   MOCK_METHOD(ConfigConstSharedPtr, getRouteConfig, (const ScopeKeyPtr& scope_key), (const));
 
+#if defined(ALIMESH)
+  MOCK_METHOD(ConfigConstSharedPtr, getRouteConfig,
+              (const ScopeKeyBuilder*, const Http::HeaderMap&, const StreamInfo::StreamInfo*),
+              (const));
+#endif
+
   std::shared_ptr<MockConfig> route_config_{new NiceMock<MockConfig>()};
 };
 
@@ -614,7 +644,15 @@ public:
   MockScopeKeyBuilder();
   ~MockScopeKeyBuilder() override;
 
+#if defined(ALIMESH)
+  MOCK_METHOD(ScopeKeyPtr, computeScopeKey,
+              (const Http::HeaderMap&, const StreamInfo::StreamInfo*,
+               std::function<ScopeKeyPtr()>& recompute),
+              (const));
   MOCK_METHOD(ScopeKeyPtr, computeScopeKey, (const Http::HeaderMap&), (const));
+#else
+  MOCK_METHOD(ScopeKeyPtr, computeScopeKey, (const Http::HeaderMap&), (const));
+#endif
 };
 
 class MockGenericConnPool : public GenericConnPool {

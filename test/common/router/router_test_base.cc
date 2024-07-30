@@ -243,6 +243,45 @@ void RouterTestBase::setNumPreviousRedirect(uint32_t num_previous_redirects) {
       StreamInfo::FilterState::StateType::Mutable, StreamInfo::FilterState::LifeSpan::Request);
 }
 
+#if defined(ALIMESH)
+void RouterTestBase::enableActiveRedirects(std::string redirect_url,
+                                           uint32_t max_internal_redirects,
+                                           bool forced_use_original_host,
+                                           bool forced_add_header_before_route_matcher) {
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_, enabled())
+      .WillByDefault(Return(true));
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_,
+          shouldRedirectForResponseCode(_))
+      .WillByDefault(Return(true));
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_, maxInternalRedirects())
+      .WillByDefault(Return(max_internal_redirects));
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_,
+          isCrossSchemeRedirectAllowed())
+      .WillByDefault(Return(false));
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_, redirectUrl(_))
+      .WillByDefault(Return(redirect_url));
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_, evaluateHeaders(_, _))
+      .WillByDefault(Invoke([&](Http::HeaderMap& headers, const StreamInfo::StreamInfo*) -> void {
+        const Envoy::Http::LowerCaseString key("test_added_header");
+        headers.addCopy(key, 1111);
+      }));
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_, forcedUseOriginalHost())
+      .WillByDefault(Return(forced_use_original_host));
+  ON_CALL(callbacks_.route_->route_entry_.internal_active_redirect_policy_,
+          forcedAddHeaderBeforeRouteMatcher())
+      .WillByDefault(Return(forced_add_header_before_route_matcher));
+  ON_CALL(callbacks_, connection())
+      .WillByDefault(Return(OptRef<const Network::Connection>{connection_}));
+}
+
+void RouterTestBase::setNumPreviousActiveRedirect(uint32_t num_previous_redirects) {
+  callbacks_.streamInfo().filterState()->setData(
+      "num_internal_redirects",
+      std::make_shared<StreamInfo::UInt32AccessorImpl>(num_previous_redirects),
+      StreamInfo::FilterState::StateType::Mutable, StreamInfo::FilterState::LifeSpan::Request);
+}
+#endif
+
 void RouterTestBase::setIncludeAttemptCountInRequest(bool include) {
   ON_CALL(callbacks_.route_->route_entry_, includeAttemptCountInRequest())
       .WillByDefault(Return(include));

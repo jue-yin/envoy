@@ -42,6 +42,10 @@
 #include "source/common/stream_info/uint32_accessor_impl.h"
 #include "source/common/tracing/http_tracer_impl.h"
 
+#if defined(ALIMESH)
+#include "source/common/http/path_utility.h"
+#endif
+
 namespace Envoy {
 namespace Router {
 namespace {
@@ -314,6 +318,61 @@ FilterUtility::StrictHeaderChecker::checkHeader(Http::RequestHeaderMap& headers,
 Stats::StatName Filter::upstreamZone(Upstream::HostDescriptionConstSharedPtr upstream_host) {
   return upstream_host ? upstream_host->localityZoneStatName() : config_.empty_stat_name_;
 }
+
+#if defined(ALIMESH)
+void Filter::chargeUpstreamGrpcCode(uint64_t http_status_code, uint64_t grpc_response_code,
+                                    const Http::ResponseHeaderMap& response_headers,
+                                    Upstream::HostDescriptionConstSharedPtr upstream_host,
+                                    bool dropped) {
+  ASSERT(Grpc::Common::getGrpcStatus(response_headers).has_value());
+  if (config_.emit_dynamic_stats_ && !callbacks_->streamInfo().healthCheck()) {
+    const Http::HeaderEntry* upstream_canary_header = response_headers.EnvoyUpstreamCanary();
+    const bool is_canary = (upstream_canary_header && upstream_canary_header->value() == "true") ||
+                           (upstream_host ? upstream_host->canary() : false);
+    const bool internal_request = Http::HeaderUtility::isEnvoyInternalRequest(*downstream_headers_);
+
+    Stats::StatName upstream_zone = upstreamZone(upstream_host);
+    Http::CodeStats::ResponseStatInfo info{
+        config_.scope_,
+        cluster_->statsScope(),
+        config_.empty_stat_name_,
+        grpc_response_code,
+        internal_request,
+        route_entry_->virtualHost().statName(),
+        request_vcluster_ ? request_vcluster_->statName() : config_.empty_stat_name_,
+        route_stats_context_.has_value() ? route_stats_context_->statName()
+                                         : config_.empty_stat_name_,
+        config_.zone_name_,
+        upstream_zone,
+        is_canary};
+
+    Http::CodeStats& code_stats = httpContext().codeStats();
+    code_stats.chargeResponseStat(info, exclude_http_code_stats_);
+
+    if (alt_stat_prefix_ != nullptr) {
+      Http::CodeStats::ResponseStatInfo alt_info{config_.scope_,
+                                                 cluster_->statsScope(),
+                                                 alt_stat_prefix_->statName(),
+                                                 grpc_response_code,
+                                                 internal_request,
+                                                 config_.empty_stat_name_,
+                                                 config_.empty_stat_name_,
+                                                 config_.empty_stat_name_,
+                                                 config_.zone_name_,
+                                                 upstream_zone,
+                                                 is_canary};
+      code_stats.chargeResponseStat(alt_info, exclude_http_code_stats_);
+    }
+
+    if (dropped) {
+      cluster_->loadReportStats().upstream_rq_dropped_.inc();
+    }
+    if (upstream_host && Http::CodeUtility::is5xx(http_status_code)) {
+      upstream_host->stats().rq_error_.inc();
+    }
+  }
+}
+#endif
 
 void Filter::chargeUpstreamCode(uint64_t response_status_code,
                                 const Http::ResponseHeaderMap& response_headers,
@@ -661,6 +720,15 @@ Http::FilterHeadersStatus Filter::decodeHeaders(Http::RequestHeaderMap& headers,
   }
   callbacks_->streamInfo().setAttemptCount(attempt_count_);
 
+#if defined(ALIMESH)
+  Http::HeaderString start_time;
+  start_time.setInteger(std::chrono::duration_cast<std::chrono::milliseconds>(
+                            callbacks_->streamInfo().startTime().time_since_epoch())
+                            .count());
+  downstream_headers_->setReferenceKey(Http::CustomHeaders::get().AliExtendedValues.TriStartTime,
+                                       start_time.getStringView());
+#endif
+
   route_entry_->finalizeRequestHeaders(headers, callbacks_->streamInfo(),
                                        !config_.suppress_envoy_headers_);
   FilterUtility::setUpstreamScheme(
@@ -803,9 +871,15 @@ Http::FilterDataStatus Filter::decodeData(Buffer::Instance& data, bool end_strea
   // a backoff timer.
   ASSERT(upstream_requests_.size() <= 1);
 
+#if defined(ALIMESH)
+  bool buffering = (retry_state_ && retry_state_->enabled()) || callbacks_->needBuffering() ||
+                   (!active_shadow_policies_.empty() && !streaming_shadows_) ||
+                   (route_entry_ && route_entry_->internalRedirectPolicy().enabled());
+#else
   bool buffering = (retry_state_ && retry_state_->enabled()) ||
                    (!active_shadow_policies_.empty() && !streaming_shadows_) ||
                    (route_entry_ && route_entry_->internalRedirectPolicy().enabled());
+#endif
   if (buffering &&
       getLength(callbacks_->decodingBuffer()) + data.length() > retry_shadow_buffer_limit_) {
     ENVOY_LOG(debug,
@@ -1455,6 +1529,15 @@ void Filter::onUpstreamHeaders(uint64_t response_code, Http::ResponseHeaderMapPt
     upstream_request.upstreamHost()->outlierDetector().putHttpResponseCode(response_code);
   }
 
+#if defined(ALIMESH)
+  static Envoy::Http::LowerCaseString shutdown_key("micro.service.shutdown.endpoint");
+  if (!headers->get(shutdown_key).empty()) {
+    upstream_request.upstreamHost()->outlierDetector().forceEjectHost();
+    ENVOY_STREAM_LOG(debug, "found shutdown header, host will be shutdown ,so forceEject this Host",
+                     *callbacks_);
+  }
+#endif
+
   if (headers->EnvoyImmediateHealthCheckFail() != nullptr) {
     upstream_request.upstreamHost()->healthChecker().setUnhealthy(
         Upstream::HealthCheckHostMonitor::UnhealthyType::ImmediateHealthCheckFail);
@@ -1516,6 +1599,18 @@ void Filter::onUpstreamHeaders(uint64_t response_code, Http::ResponseHeaderMapPt
     // next downstream.
   }
 
+#if defined(ALIMESH)
+  if (route_entry_->internalActiveRedirectPolicy().enabled() &&
+      route_entry_->internalActiveRedirectPolicy().shouldRedirectForResponseCode(
+          static_cast<Http::Code>(response_code)) &&
+      setupActiveRedirect(*headers, upstream_request)) {
+    ENVOY_STREAM_LOG(debug, "setup active redirect", *callbacks_);
+    return;
+    // If the redirect could not be handled, fail open and let it pass to the
+    // next downstream.
+  }
+#endif
+
   // Check if we got a "bad" response, but there are still upstream requests in
   // flight awaiting headers or scheduled retries. If so, exit to give them a
   // chance to return before returning a response downstream.
@@ -1543,15 +1638,52 @@ void Filter::onUpstreamHeaders(uint64_t response_code, Http::ResponseHeaderMapPt
     MonotonicTime response_received_time = dispatcher.timeSource().monotonicTime();
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         response_received_time - downstream_request_complete_time_);
+#if defined(ALIMESH)
+    std::chrono::milliseconds duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        response_received_time - callbacks_->streamInfo().startTimeMonotonic());
+    Http::HeaderString cost_time;
+    cost_time.setInteger(duration_ms.count());
+    headers->setReferenceKey(Http::CustomHeaders::get().AliExtendedValues.TriCostTime,
+                             cost_time.getStringView());
+
+    Http::HeaderString arrive_time;
+    arrive_time.setInteger(std::chrono::duration_cast<std::chrono::milliseconds>(
+                               callbacks_->streamInfo().startTime().time_since_epoch())
+                               .count());
+    headers->setReferenceKey(Http::CustomHeaders::get().AliExtendedValues.TriArriveTime,
+                             arrive_time.getStringView());
+
+    SystemTime system_response_receive_time = dispatcher.timeSource().systemTime();
+    Http::HeaderString start_time;
+    start_time.setInteger(std::chrono::duration_cast<std::chrono::milliseconds>(
+                              system_response_receive_time.time_since_epoch())
+                              .count());
+    headers->setReferenceKey(Http::CustomHeaders::get().AliExtendedValues.TriRespStartTime,
+                             start_time.getStringView());
+
+    // The X-enel-upward-service-time request header is critical and is needed in the access log
+    // to record the processing time of the upstream service, so we need to output it.
+    headers->setEnvoyUpstreamServiceTime(ms.count());
+#else
     if (!config_.suppress_envoy_headers_) {
       headers->setEnvoyUpstreamServiceTime(ms.count());
     }
+#endif
   }
 
   upstream_request.upstreamCanary(
       (headers->EnvoyUpstreamCanary() && headers->EnvoyUpstreamCanary()->value() == "true") ||
       upstream_request.upstreamHost()->canary());
+#if defined(ALIMESH)
+  if (grpc_status.has_value()) {
+    chargeUpstreamGrpcCode(response_code, grpc_to_http_status, *headers,
+                           upstream_request.upstreamHost(), false);
+  } else {
+    chargeUpstreamCode(response_code, *headers, upstream_request.upstreamHost(), false);
+  }
+#else
   chargeUpstreamCode(response_code, *headers, upstream_request.upstreamHost(), false);
+#endif
   if (!Http::CodeUtility::is5xx(response_code)) {
     handleNon5xxResponseHeaders(grpc_status, upstream_request, end_stream, grpc_to_http_status);
   }
@@ -1841,6 +1973,150 @@ bool Filter::convertRequestHeadersForInternalRedirect(Http::RequestHeaderMap& do
                                                       "://", original_host, original_path));
   return true;
 }
+
+#if defined(ALIMESH)
+bool Filter::setupActiveRedirect(const Http::ResponseHeaderMap&, UpstreamRequest&) {
+  ENVOY_STREAM_LOG(debug, "attempting internal active redirect", *callbacks_);
+
+  std::string end_stream = downstream_end_stream_ ? "true" : "false";
+  ENVOY_STREAM_LOG(debug, "downstream_end_stream: {}", *callbacks_, end_stream);
+  ENVOY_STREAM_LOG(debug, "!decodingBuffer: {}", *callbacks_,
+                   !callbacks_->decodingBuffer() ? "true" : "false");
+
+  // Redirects are not supported for streaming requests yet.
+  if (downstream_end_stream_ &&
+      !callbacks_->decodingBuffer() && // Redirects with body not yet supported.
+      convertRequestHeadersForInternalActiveRedirect(*downstream_headers_) &&
+      callbacks_->recreateStream(nullptr)) {
+    ENVOY_STREAM_LOG(debug, "Internal active redirect success", *callbacks_);
+    cluster_->trafficStats()->upstream_internal_redirect_succeeded_total_.inc();
+    return true;
+  }
+
+  ENVOY_STREAM_LOG(warn, "Internal active redirect failed", *callbacks_);
+  cluster_->trafficStats()->upstream_internal_redirect_failed_total_.inc();
+  return false;
+}
+
+bool Filter::convertRequestHeadersForInternalActiveRedirect(
+    Http::RequestHeaderMap& downstream_headers) {
+  if (!downstream_headers.Path()) {
+    ENVOY_STREAM_LOG(warn, "There is no path in the downstream header", *callbacks_);
+    return false;
+  }
+
+  // Make sure the redirect response contains a URL to redirect to.
+  const auto& policy = route_entry_->internalActiveRedirectPolicy();
+  const std::string path(downstream_headers.getPathValue());
+  absl::string_view just_path(Http::PathUtil::removeQueryAndFragment(path));
+  std::string redirect_url = policy.redirectUrl(just_path.data());
+  if (redirect_url.empty()) {
+    ENVOY_STREAM_LOG(warn, "The redirect is empty", *callbacks_);
+    stats_.passthrough_internal_redirect_bad_location_.inc();
+    return false;
+  }
+
+  Http::Utility::Url absolute_url;
+  if (!absolute_url.initialize(redirect_url, false)) {
+    ENVOY_STREAM_LOG(warn, "Invalid redirect address: {}", *callbacks_, redirect_url);
+    stats_.passthrough_internal_redirect_bad_location_.inc();
+    return false;
+  }
+
+  // Don't allow serving TLS responses over plaintext unless allowed by policy.
+  const bool scheme_is_http = schemeIsHttp(downstream_headers, *callbacks_->connection());
+  const bool target_is_http = absolute_url.scheme() == Http::Headers::get().SchemeValues.Http;
+  if (!policy.isCrossSchemeRedirectAllowed() && scheme_is_http != target_is_http) {
+    ENVOY_STREAM_LOG(warn, "Illegal Scheme", *callbacks_);
+    stats_.passthrough_internal_redirect_unsafe_scheme_.inc();
+    return false;
+  }
+
+  const StreamInfo::FilterStateSharedPtr& filter_state = callbacks_->streamInfo().filterState();
+  // Make sure that performing the redirect won't result in exceeding the configured number of
+  // redirects allowed for this route.
+  if (!filter_state->hasData<StreamInfo::UInt32Accessor>(NumInternalRedirectsFilterStateName)) {
+    filter_state->setData(
+        NumInternalRedirectsFilterStateName, std::make_shared<StreamInfo::UInt32AccessorImpl>(0),
+        StreamInfo::FilterState::StateType::Mutable, StreamInfo::FilterState::LifeSpan::Request);
+  }
+  StreamInfo::UInt32Accessor* num_internal_redirect = {};
+  num_internal_redirect =
+      filter_state->getDataMutable<StreamInfo::UInt32Accessor>(NumInternalRedirectsFilterStateName);
+  if (num_internal_redirect->value() >= policy.maxInternalRedirects()) {
+    ENVOY_STREAM_LOG(warn, "Redirection times exceeded maximum {}", *callbacks_,
+                     policy.maxInternalRedirects());
+    stats_.passthrough_internal_redirect_too_many_redirects_.inc();
+    return false;
+  }
+  // Copy the old values, so they can be restored if the redirect fails.
+  const std::string original_host(downstream_headers.getHostValue());
+  const std::string original_path(downstream_headers.getPathValue());
+  const bool scheme_is_set = (downstream_headers.Scheme() != nullptr);
+  Cleanup restore_original_headers(
+      [&downstream_headers, original_host, original_path, scheme_is_set, scheme_is_http]() {
+        downstream_headers.setHost(original_host);
+        downstream_headers.setPath(original_path);
+        if (scheme_is_set) {
+          downstream_headers.setScheme(scheme_is_http ? Http::Headers::get().SchemeValues.Http
+                                                      : Http::Headers::get().SchemeValues.Https);
+        }
+      });
+
+  // Replace the original scheme and path.
+  downstream_headers.setScheme(absolute_url.scheme());
+  downstream_headers.setPath(absolute_url.pathAndQueryParams());
+
+  if (!policy.forcedUseOriginalHost()) {
+    // Replace the original host.
+    ENVOY_STREAM_LOG(info, "Replace the original host", *callbacks_);
+    downstream_headers.setHost(absolute_url.hostAndPort());
+  }
+
+  if (policy.forcedAddHeaderBeforeRouteMatcher()) {
+    policy.evaluateHeaders(downstream_headers, nullptr);
+  }
+
+  // Only clear the route cache if there are downstream callbacks. There aren't, for example,
+  // for async connections.
+  if (callbacks_->downstreamCallbacks()) {
+    callbacks_->downstreamCallbacks()->clearRouteCache();
+  }
+
+  const auto route = callbacks_->route();
+  // Don't allow a redirect to a non existing route.
+  if (!route) {
+    stats_.passthrough_internal_redirect_no_route_.inc();
+    ENVOY_STREAM_LOG(warn, "The internal redirect no route", *callbacks_);
+    return false;
+  }
+
+  const auto& route_name = route->directResponseEntry() ? route->directResponseEntry()->routeName()
+                                                        : route->routeEntry()->routeName();
+  for (const auto& predicate : policy.predicates()) {
+    if (!predicate->acceptTargetRoute(*filter_state, route_name, !scheme_is_http,
+                                      !target_is_http)) {
+      stats_.passthrough_internal_redirect_predicate_.inc();
+      ENVOY_STREAM_LOG(warn, "rejecting redirect targeting {}, by {} predicate", *callbacks_,
+                       route_name, predicate->name());
+      return false;
+    }
+  }
+
+  if (!policy.forcedAddHeaderBeforeRouteMatcher()) {
+    policy.evaluateHeaders(downstream_headers, nullptr);
+  }
+
+  num_internal_redirect->increment();
+  restore_original_headers.cancel();
+  // Preserve the original request URL for the second pass.
+  downstream_headers.setEnvoyOriginalUrl(absl::StrCat(scheme_is_http
+                                                          ? Http::Headers::get().SchemeValues.Http
+                                                          : Http::Headers::get().SchemeValues.Https,
+                                                      "://", original_host, original_path));
+  return true;
+}
+#endif
 
 void Filter::runRetryOptionsPredicates(UpstreamRequest& retriable_request) {
   for (const auto& options_predicate : route_entry_->retryPolicy().retryOptionsPredicates()) {

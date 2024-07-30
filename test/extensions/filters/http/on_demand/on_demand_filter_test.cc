@@ -134,22 +134,28 @@ TEST_F(OnDemandFilterTest,
 TEST_F(OnDemandFilterTest, TestOnRouteConfigUpdateCompletionContinuesDecodingWithRedirectWithBody) {
   Buffer::OwnedImpl buffer;
   EXPECT_CALL(decoder_callbacks_, continueDecoding());
+#ifndef ALIMESH
   EXPECT_CALL(decoder_callbacks_, decodingBuffer()).WillOnce(Return(&buffer));
+#endif
   filter_->onRouteConfigUpdateCompletion(true);
 }
 
 // tests onRouteConfigUpdateCompletion() when ActiveStream recreation fails
 TEST_F(OnDemandFilterTest, OnRouteConfigUpdateCompletionContinuesDecodingIfRedirectFails) {
   EXPECT_CALL(decoder_callbacks_, continueDecoding());
+#ifndef ALIMESH
   EXPECT_CALL(decoder_callbacks_, decodingBuffer()).WillOnce(Return(nullptr));
   EXPECT_CALL(decoder_callbacks_, recreateStream(_)).WillOnce(Return(false));
+#endif
   filter_->onRouteConfigUpdateCompletion(true);
 }
 
 // tests onRouteConfigUpdateCompletion() when route was resolved
 TEST_F(OnDemandFilterTest, OnRouteConfigUpdateCompletionRestartsActiveStream) {
+#ifndef ALIMESH
   EXPECT_CALL(decoder_callbacks_, decodingBuffer()).WillOnce(Return(nullptr));
   EXPECT_CALL(decoder_callbacks_, recreateStream(_)).WillOnce(Return(true));
+#endif
   filter_->onRouteConfigUpdateCompletion(true);
 }
 

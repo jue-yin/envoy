@@ -285,6 +285,10 @@ private:
     }
     void disarmRequestTimeout() override;
     void resetIdleTimer() override;
+#if defined(ALIMESH)
+    void recreateStream(StreamInfo::FilterStateSharedPtr filter_state,
+                        bool backup_for_replace) override;
+#endif
     void recreateStream(StreamInfo::FilterStateSharedPtr filter_state) override;
     void resetStream(Http::StreamResetReason reset_reason = Http::StreamResetReason::LocalReset,
                      absl::string_view transport_failure_reason = "") override;

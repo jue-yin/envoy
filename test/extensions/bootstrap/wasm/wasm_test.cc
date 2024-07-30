@@ -143,7 +143,14 @@ TEST_P(WasmTestMatrix, LoggingWithEnvVars) {
   createWasm();
   setWasmCode("logging");
   auto wasm_weak = std::weak_ptr<Extensions::Common::Wasm::Wasm>(wasm_);
+
+#ifdef ALIMESH
+  // auto wasm_handler =
+  //     std::make_unique<Extensions::Common::Wasm::WasmHandle>(std::move(wasm_), *dispatcher_);
   auto wasm_handler = std::make_unique<Extensions::Common::Wasm::WasmHandle>(std::move(wasm_));
+#else
+  auto wasm_handler = std::make_unique<Extensions::Common::Wasm::WasmHandle>(std::move(wasm_));
+#endif
 
   EXPECT_TRUE(wasm_weak.lock()->load(code_, false));
   EXPECT_TRUE(wasm_weak.lock()->initialize());

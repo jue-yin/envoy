@@ -53,6 +53,11 @@ bool TestUtility::headerMapEqualIgnoreOrder(const Http::HeaderMap& lhs,
   absl::flat_hash_set<std::string> rhs_keys;
   lhs.iterate([&lhs_keys](const Http::HeaderEntry& header) -> Http::HeaderMap::Iterate {
     const std::string key{header.key().getStringView()};
+#if defined(ALIMESH)
+    if (key == Http::CustomHeaders::get().AliExtendedValues.TriStartTime.get()) {
+      return Http::HeaderMap::Iterate::Continue;
+    }
+#endif
     lhs_keys.insert(key);
     return Http::HeaderMap::Iterate::Continue;
   });

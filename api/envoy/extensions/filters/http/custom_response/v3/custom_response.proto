@@ -6,6 +6,7 @@ import "xds/annotations/v3/status.proto";
 import "xds/type/matcher/v3/matcher.proto";
 
 import "udpa/annotations/status.proto";
+import "validate/validate.proto";
 
 option java_package = "io.envoyproxy.envoy.extensions.filters.http.custom_response.v3";
 option java_outer_classname = "CustomResponseProto";
@@ -105,4 +106,16 @@ message CustomResponse {
   // documentation for more information on the matcher trees.
   // [#extension-category: envoy.http.custom_response]
   xds.type.matcher.v3.Matcher custom_response_matcher = 1;
+
+  // Indicates whether the router filter should cache the body.
+  BufferSettings with_request_body = 101;
+}
+
+
+// Configuration for buffering the request data.
+message BufferSettings {
+  // Sets the maximum size of a message body that the filter will hold in memory.
+  // Exceeding this size does not result in a ``HTTP 413`` error; however, it prevents
+  // the full original body from being used during internal redirection.
+  uint32 max_request_bytes = 1 [(validate.rules).uint32 = {gt: 0}];
 }

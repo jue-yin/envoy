@@ -28,6 +28,12 @@ MockInternalRedirectPolicy::MockInternalRedirectPolicy() {
   ON_CALL(*this, enabled()).WillByDefault(Return(false));
 }
 
+#if defined(ALIMESH)
+MockInternalActiveRedirectPolicy::MockInternalActiveRedirectPolicy() {
+  ON_CALL(*this, enabled()).WillByDefault(Return(false));
+}
+#endif
+
 MockRetryState::MockRetryState() = default;
 
 void MockRetryState::expectHeadersRetry() {
@@ -114,6 +120,10 @@ MockRouteEntry::MockRouteEntry() {
   ON_CALL(*this, connectConfig()).WillByDefault(Invoke([this]() {
     return connect_config_.has_value() ? makeOptRef(connect_config_.value()) : absl::nullopt;
   }));
+#if defined(ALIMESH)
+  ON_CALL(*this, internalActiveRedirectPolicy())
+      .WillByDefault(ReturnRef(internal_active_redirect_policy_));
+#endif
   ON_CALL(*this, earlyDataPolicy()).WillByDefault(ReturnRef(early_data_policy_));
   path_matcher_ = std::make_shared<testing::NiceMock<MockPathMatcher>>();
   ON_CALL(*this, pathMatcher()).WillByDefault(ReturnRef(path_matcher_));
@@ -163,6 +173,9 @@ MockRouteConfigProviderManager::~MockRouteConfigProviderManager() = default;
 
 MockScopedConfig::MockScopedConfig() {
   ON_CALL(*this, getRouteConfig(_)).WillByDefault(Return(route_config_));
+#if defined(ALIMESH)
+  ON_CALL(*this, getRouteConfig(_, _, _)).WillByDefault(Return(route_config_));
+#endif
 }
 MockScopedConfig::~MockScopedConfig() = default;
 

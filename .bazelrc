@@ -528,3 +528,5 @@ common:debug --config=debug-tests
 try-import %workspace%/clang.bazelrc
 try-import %workspace%/user.bazelrc
 try-import %workspace%/local_tsan.bazelrc
+
+build --define tcmalloc=gperftools

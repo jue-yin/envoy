@@ -39,6 +39,10 @@
 #include "absl/container/node_hash_map.h"
 #include "absl/types/optional.h"
 
+#if defined(ALIMESH)
+#include "contrib/common/active_redirect/source/active_redirect_policy_impl.h"
+#endif
+
 namespace Envoy {
 namespace Router {
 
@@ -157,6 +161,65 @@ private:
   static const Envoy::Config::TypedMetadataImpl<Envoy::Config::TypedMetadataFactory>
       typed_metadata_;
 };
+
+#if defined(ALIMESH)
+class SslPermanentRedirector : public SslRedirector {
+public:
+  Http::Code responseCode() const override { return Http::Code::PermanentRedirect; }
+};
+class SslPermanentRedirectRoute : public SslRedirectRoute {
+public:
+  const DirectResponseEntry* directResponseEntry() const override {
+    return &SSL_PERMANENT_REDIRECTOR;
+  }
+
+private:
+  static const SslPermanentRedirector SSL_PERMANENT_REDIRECTOR;
+};
+
+class SNIRedirector : public DirectResponseEntry {
+public:
+  // Router::DirectResponseEntry
+  void finalizeResponseHeaders(Http::ResponseHeaderMap&,
+                               const StreamInfo::StreamInfo&) const override {}
+  Http::HeaderTransforms responseHeaderTransforms(const StreamInfo::StreamInfo&,
+                                                  bool) const override {
+    return {};
+  }
+  std::string newUri(const Http::RequestHeaderMap&) const override { return ""; };
+  void rewritePathHeader(Http::RequestHeaderMap&, bool) const override {}
+  Http::Code responseCode() const override { return Http::Code::MisdirectedRequest; }
+  const std::string& responseBody() const override { return EMPTY_STRING; }
+  const std::string& routeName() const override { return route_name_; }
+
+private:
+  const std::string route_name_;
+};
+
+class SNIRedirectRoute : public Route {
+public:
+  // Router::Route
+  const DirectResponseEntry* directResponseEntry() const override { return &SNI_REDIRECTOR; }
+  const RouteEntry* routeEntry() const override { return nullptr; }
+  const Decorator* decorator() const override { return nullptr; }
+  const RouteTracing* tracingConfig() const override { return nullptr; }
+  const RouteSpecificFilterConfig* mostSpecificPerFilterConfig(const std::string&) const override {
+    return nullptr;
+  }
+  bool filterDisabled(absl::string_view) const override { return false; }
+  void traversePerFilterConfig(
+      const std::string&,
+      std::function<void(const Router::RouteSpecificFilterConfig&)>) const override {}
+  const envoy::config::core::v3::Metadata& metadata() const override { return metadata_; }
+  const Envoy::Config::TypedMetadata& typedMetadata() const override { return typed_metadata_; }
+
+private:
+  static const SNIRedirector SNI_REDIRECTOR;
+  static const envoy::config::core::v3::Metadata metadata_;
+  static const Envoy::Config::TypedMetadataImpl<Envoy::Config::TypedMetadataFactory>
+      typed_metadata_;
+};
+#endif
 
 /**
  * Implementation of CorsPolicy that reads from the proto route and virtual host config.
@@ -383,6 +446,10 @@ private:
   enum class SslRequirements : uint8_t { None, ExternalOnly, All };
 
   static const std::shared_ptr<const SslRedirectRoute> SSL_REDIRECT_ROUTE;
+#if defined(ALIMESH)
+  static const std::shared_ptr<const SslPermanentRedirectRoute> SSL_PERMANENT_REDIRECT_ROUTE;
+  static const std::shared_ptr<const SNIRedirectRoute> SNI_REDIRECT_ROUTE;
+#endif
 
   CommonVirtualHostSharedPtr shared_virtual_host_;
 
@@ -390,6 +457,9 @@ private:
 
   std::vector<RouteEntryImplBaseConstSharedPtr> routes_;
   Matcher::MatchTreeSharedPtr<Http::HttpMatchingData> matcher_;
+#if defined(ALIMESH)
+  std::vector<std::string> allow_server_names_;
+#endif
 };
 
 using VirtualHostSharedPtr = std::shared_ptr<VirtualHostImpl>;
@@ -700,6 +770,18 @@ public:
     }
     return DefaultInternalRedirectPolicy::get();
   }
+#if defined(ALIMESH)
+  const InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const override {
+    if (internal_active_redirect_policy_ != nullptr) {
+      return *internal_active_redirect_policy_;
+    }
+    return DefaultInternalActiveRedirectPolicy::get();
+  }
+
+  RouteConstSharedPtr clone(const std::string& name) const {
+    return std::make_shared<DynamicRouteEntry>(this, shared_from_this(), name);
+  }
+#endif
 
   const PathMatcherSharedPtr& pathMatcher() const override { return path_matcher_; }
   const PathRewriterSharedPtr& pathRewriter() const override { return path_rewriter_; }
@@ -809,7 +891,12 @@ public:
   // path matching to ignore the path-parameters.
   absl::string_view sanitizePathBeforePathMatching(const absl::string_view path) const;
 
+#if defined(ALIMESH)
+  class DynamicRouteEntry : public RouteEntryAndRoute,
+                            public std::enable_shared_from_this<DynamicRouteEntry> {
+#else
   class DynamicRouteEntry : public RouteEntryAndRoute {
+#endif
   public:
     DynamicRouteEntry(const RouteEntryAndRoute* parent, RouteConstSharedPtr owner,
                       const std::string& name)
@@ -941,6 +1028,19 @@ public:
       parent_->traversePerFilterConfig(filter_name, cb);
     };
 
+#if defined(ALIMESH)
+    const InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const override {
+      return parent_->internalActiveRedirectPolicy();
+    }
+
+    RouteConstSharedPtr clone(const std::string& name) const {
+      return std::make_shared<Envoy::Router::RouteEntryImplBase::DynamicRouteEntry>(
+          parent_, shared_from_this(), name);
+    }
+
+    virtual RouteConstSharedPtr getRouteConstSharedPtr() const { return shared_from_this(); }
+#endif
+
   private:
     const RouteEntryAndRoute* parent_;
 
@@ -1034,6 +1134,10 @@ public:
         std::function<void(const Router::RouteSpecificFilterConfig&)> cb) const override;
 
     const Http::LowerCaseString& clusterHeaderName() const { return cluster_header_name_; }
+
+#if defined(ALIMESH)
+    RouteConstSharedPtr getRouteConstSharedPtr() const override { return shared_from_this(); }
+#endif
 
   private:
     const std::string runtime_key_;
@@ -1164,6 +1268,12 @@ private:
   PathRewriterSharedPtr buildPathRewriter(envoy::config::route::v3::Route route,
                                           ProtobufMessage::ValidationVisitor& validator) const;
 
+#if defined(ALIMESH)
+  std::unique_ptr<InternalActiveRedirectPoliciesImpl>
+  buildActiveInternalRedirectPolicy(const envoy::config::route::v3::RouteAction& route_config,
+                                    ProtobufMessage::ValidationVisitor& validator,
+                                    absl::string_view current_route_name) const;
+#endif
   RouteConstSharedPtr
   pickClusterViaClusterHeader(const Http::LowerCaseString& cluster_header_name,
                               const Http::HeaderMap& headers,
@@ -1219,6 +1329,9 @@ private:
   PerFilterConfigs per_filter_configs_;
   const std::string route_name_;
   TimeSource& time_source_;
+#if defined(ALIMESH)
+  std::unique_ptr<const InternalActiveRedirectPoliciesImpl> internal_active_redirect_policy_;
+#endif
   EarlyDataPolicyPtr early_data_policy_;
 
   // Keep small members (bools and enums) at the end of class, to reduce alignment overhead.

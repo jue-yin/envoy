@@ -55,6 +55,10 @@ public:
   const Http::LowerCaseString EnvoyAuthPartialBody{absl::StrCat(prefix(), "-auth-partial-body")};
   const Http::LowerCaseString EnvoyAuthHeadersToRemove{
       absl::StrCat(prefix(), "-auth-headers-to-remove")};
+
+#if defined(ALIMESH)
+  const Http::LowerCaseString XMseExternalAuthzCheckResult{"x-mse-external-authz-check-result"};
+#endif
   const Http::LowerCaseString EnvoyAuthFailureModeAllowed{
       absl::StrCat(prefix(), "-auth-failure-mode-allowed")};
 };

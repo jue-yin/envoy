@@ -324,6 +324,12 @@ private:
 
     const ConnectConfigOptRef connectConfig() const override { return connect_config_nullopt_; }
 
+#if defined(ALIMESH)
+    const Router::InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const override {
+      return internal_active_redirect_policy_;
+    }
+#endif
+
     bool includeAttemptCountInRequest() const override { return false; }
     bool includeAttemptCountInResponse() const override { return false; }
     const Router::RouteEntry::UpgradeMap& upgradeMap() const override { return upgrade_map_; }
@@ -342,6 +348,10 @@ private:
     static const NullVirtualHost virtual_host_;
     static const std::multimap<std::string, std::string> opaque_config_;
     static const NullPathMatchCriterion path_match_criterion_;
+
+#if defined(ALIMESH)
+    static const Router::InternalActiveRedirectPoliciesImpl internal_active_redirect_policy_;
+#endif
 
     Router::RouteEntry::UpgradeMap upgrade_map_;
     const std::string& cluster_name_;

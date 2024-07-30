@@ -549,6 +549,7 @@ Status ConnectionImpl::completeCurrentHeader() {
 
   // Account for ":" and "\r\n" bytes between the header key value pair.
   getBytesMeter().addHeaderBytesReceived(CRLF_SIZE + 1);
+  ENVOY_LOG(trace, "CRLF_SIZE + 1");
 
   // TODO(10646): Switch to use HeaderUtility::checkHeaderNameForUnderscores().
   RETURN_IF_ERROR(checkHeaderNameForUnderscores());
@@ -783,6 +784,8 @@ Status ConnectionImpl::onHeaderFieldImpl(const char* data, size_t length) {
   ASSERT(dispatching_);
 
   getBytesMeter().addHeaderBytesReceived(length);
+  absl::string_view log_header_field{data, length};
+  ENVOY_LOG(trace, "count header filed: {}, length: {}", log_header_field, length);
 
   // We previously already finished up the headers, these headers are
   // now trailers.
@@ -808,6 +811,8 @@ Status ConnectionImpl::onHeaderValueImpl(const char* data, size_t length) {
   ASSERT(dispatching_);
 
   getBytesMeter().addHeaderBytesReceived(length);
+  absl::string_view log_header_value{data, length};
+  ENVOY_LOG(trace, "count header value: {}, length: {}", log_header_value, length);
 
   if (header_parsing_state_ == HeaderParsingState::Done && !enableTrailers()) {
     // Ignore trailers.

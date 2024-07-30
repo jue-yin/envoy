@@ -166,6 +166,9 @@ public:
   void localOriginFailure();
   void localOriginNoFailure();
 
+#if defined(ALIMESH)
+  void forceEjectHost() override;
+#endif
   // handlers for setting and getting jitter, used to add a random value
   // to outlier eject time in order to prevent a connection storm when
   // hosts are unejected

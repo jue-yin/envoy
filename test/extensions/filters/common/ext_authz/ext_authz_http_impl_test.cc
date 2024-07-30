@@ -298,6 +298,87 @@ TEST_F(ExtAuthzHttpClientTest, ContentLengthEqualZeroWithAllowedHeaders) {
   EXPECT_EQ(message_ptr->headers().getMethodValue(), "POST");
 }
 
+#if defined(ALIMESH)
+TEST_F(ExtAuthzHttpClientTest, IsAuthorizationPass) {
+  {
+    // 200 code without x-mse-external-authz-check-result
+    const auto expected_headers = TestCommon::makeHeaderValueOption({{":status", "200", false}});
+    auto check_response = TestCommon::makeMessageResponse(expected_headers);
+    EXPECT_TRUE(isAuthorizationPass(check_response->headers()));
+  }
+
+  { // 200 code with x-mse-external-authz-check-result value is true
+    const auto expected_headers = TestCommon::makeHeaderValueOption(
+        {{":status", "200", false}, {"x-mse-external-authz-check-result", "true", false}});
+    auto check_response = TestCommon::makeMessageResponse(expected_headers);
+    EXPECT_TRUE(isAuthorizationPass(check_response->headers()));
+  }
+
+  { // 200 code with x-mse-external-authz-check-result value is false
+    const auto expected_headers = TestCommon::makeHeaderValueOption(
+        {{":status", "200", false}, {"x-mse-external-authz-check-result", "false", false}});
+    auto check_response = TestCommon::makeMessageResponse(expected_headers);
+    EXPECT_FALSE(isAuthorizationPass(check_response->headers()));
+  }
+
+  { // nor 200 code with x-mse-external-authz-check-result value is true
+    const auto expected_headers = TestCommon::makeHeaderValueOption(
+        {{":status", "503", false}, {"x-mse-external-authz-check-result", "true", false}});
+    auto check_response = TestCommon::makeMessageResponse(expected_headers);
+    EXPECT_FALSE(isAuthorizationPass(check_response->headers()));
+  }
+}
+
+TEST_F(ExtAuthzHttpClientTest, AuthorizationOkWithXMseExternalAuthzCheckResultTrue) {
+  const auto expected_headers = TestCommon::makeHeaderValueOption(
+      {{":status", "200", false}, {"x-mse-external-authz-check-result", "true", false}});
+  const auto authz_response = TestCommon::makeAuthzResponse(CheckStatus::OK);
+  auto check_response = TestCommon::makeMessageResponse(expected_headers);
+  envoy::service::auth::v3::CheckRequest request;
+  client_->check(request_callbacks_, request, parent_span_, stream_info_);
+
+  EXPECT_CALL(request_callbacks_,
+              onComplete_(WhenDynamicCastTo<ResponsePtr&>(AuthzOkResponse(authz_response))));
+  client_->onSuccess(async_request_, std::move(check_response));
+}
+
+TEST_F(ExtAuthzHttpClientTest, AuthorizationDeniedWithXMseExternalAuthzCheckResultTrueButCode403) {
+  const auto expected_headers = TestCommon::makeHeaderValueOption(
+      {{":status", "403", false}, {"x-mse-external-authz-check-result", "true", false}});
+  const auto authz_response = TestCommon::makeAuthzResponse(
+      CheckStatus::Denied, Http::Code::Forbidden, EMPTY_STRING, expected_headers);
+  auto check_response = TestCommon::makeMessageResponse(expected_headers);
+
+  envoy::service::auth::v3::CheckRequest request;
+  client_->check(request_callbacks_, request, parent_span_, stream_info_);
+
+  // Check for child span tagging when the request is denied.
+  EXPECT_CALL(child_span_, setTag(Eq("ext_authz_http_status"), Eq("Forbidden")));
+  EXPECT_CALL(child_span_, setTag(Eq("ext_authz_status"), Eq("ext_authz_unauthorized")));
+  client_->onBeforeFinalizeUpstreamSpan(child_span_, &check_response->headers());
+
+  EXPECT_CALL(request_callbacks_,
+              onComplete_(WhenDynamicCastTo<ResponsePtr&>(AuthzDeniedResponse(authz_response))));
+  client_->onSuccess(async_request_, TestCommon::makeMessageResponse(expected_headers));
+}
+
+TEST_F(ExtAuthzHttpClientTest, AuthorizationDeniedWithCode200ButXMseExternalAuthzCheckResultFalse) {
+  const auto expected_body = std::string{"test"};
+  const auto expected_headers = TestCommon::makeHeaderValueOption(
+      {{":status", "200", false}, {"x-mse-external-authz-check-result", "false", false}});
+  const auto authz_response = TestCommon::makeAuthzResponse(CheckStatus::Denied, Http::Code::OK,
+                                                            expected_body, expected_headers);
+
+  envoy::service::auth::v3::CheckRequest request;
+  client_->check(request_callbacks_, request, parent_span_, stream_info_);
+
+  EXPECT_CALL(request_callbacks_,
+              onComplete_(WhenDynamicCastTo<ResponsePtr&>(AuthzDeniedResponse(authz_response))));
+  client_->onSuccess(async_request_,
+                     TestCommon::makeMessageResponse(expected_headers, expected_body));
+}
+#endif
+
 // Verify client response when authorization server returns a 200 OK.
 TEST_F(ExtAuthzHttpClientTest, AuthorizationOk) {
   const auto expected_headers = TestCommon::makeHeaderValueOption({{":status", "200", false}});

@@ -65,7 +65,7 @@ configure_make(
     targets = [
         "ARFLAGS='' libs install-subdirs",
     ],
-    alwayslink = True,
+    alwayslink = False,
 )
 
 cc_library(

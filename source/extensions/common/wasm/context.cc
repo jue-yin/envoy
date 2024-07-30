@@ -59,6 +59,27 @@ namespace {
 // FilterState prefix for CelState values.
 constexpr absl::string_view CelStateKeyPrefix = "wasm.";
 
+#if defined(ALIMESH)
+constexpr absl::string_view CustomeTraceSpanTagPrefix = "trace_span_tag.";
+constexpr std::string_view ClearRouteCacheKey = "clear_route_cache";
+constexpr std::string_view DisableClearRouteCache = "off";
+constexpr std::string_view SetDecoderBufferLimit = "set_decoder_buffer_limit";
+constexpr std::string_view SetEncoderBufferLimit = "set_encoder_buffer_limit";
+
+bool stringViewToUint32(std::string_view str, uint32_t& out_value) {
+  try {
+    unsigned long temp = std::stoul(std::string(str));
+    if (temp <= std::numeric_limits<uint32_t>::max()) {
+      out_value = static_cast<uint32_t>(temp);
+      return true;
+    }
+  } catch (const std::exception& e) {
+    ENVOY_LOG_MISC(critical, "stringToUint exception '{}'", e.what());
+  }
+  return false;
+}
+#endif
+
 using HashPolicy = envoy::config::route::v3::RouteAction::HashPolicy;
 using CelState = Filters::Common::Expr::CelState;
 using CelStatePrototype = Filters::Common::Expr::CelStatePrototype;
@@ -452,6 +473,12 @@ Context::findValue(absl::string_view name, Protobuf::Arena* arena, bool last) co
   using google::api::expr::runtime::CelProtoWrapper;
   using google::api::expr::runtime::CelValue;
 
+#if defined(ALIMESH)
+  Envoy::Http::StreamFilterCallbacks* filter_callbacks = decoder_callbacks_;
+  if (filter_callbacks == nullptr) {
+    filter_callbacks = encoder_callbacks_;
+  }
+#endif
   const StreamInfo::StreamInfo* info = getConstRequestStreamInfo();
   // In order to delegate to the StreamActivation method, we have to set the
   // context properties to match the Wasm context properties in all callbacks
@@ -539,9 +566,28 @@ Context::findValue(absl::string_view name, Protobuf::Arena* arena, bool last) co
     }
     break;
   case PropertyToken::ROUTE_NAME:
+#if defined(ALIMESH)
+    if (info && !info->getRouteName().empty()) {
+      return CelValue::CreateString(&info->getRouteName());
+    }
+    if (filter_callbacks) {
+      auto route = filter_callbacks->route();
+      if (route) {
+        auto route_entry = route->routeEntry();
+        if (route_entry) {
+          return CelValue::CreateString(&route_entry->routeName());
+        }
+        auto dr_entry = route->directResponseEntry();
+        if (dr_entry) {
+          return CelValue::CreateString(&dr_entry->routeName());
+        }
+      }
+    }
+#else
     if (info) {
       return CelValue::CreateString(&info->getRouteName());
     }
+#endif
     break;
   case PropertyToken::ROUTE_METADATA:
     if (info && info->route()) {
@@ -716,9 +762,16 @@ WasmResult Context::addHeaderMapValue(WasmHeaderMapType type, std::string_view k
   }
   const Http::LowerCaseString lower_key{std::string(key)};
   map->addCopy(lower_key, std::string(value));
+#if defined(ALIMESH)
+  if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
+      !disable_clear_route_cache_) {
+    decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
+  }
+#else
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
   }
+#endif
   return WasmResult::Ok;
 }
 
@@ -791,9 +844,16 @@ WasmResult Context::setHeaderMapPairs(WasmHeaderMapType type, const Pairs& pairs
     const Http::LowerCaseString lower_key{std::string(p.first)};
     map->addCopy(lower_key, std::string(p.second));
   }
+#if defined(ALIMESH)
+  if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
+      !disable_clear_route_cache_) {
+    decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
+  }
+#else
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
   }
+#endif
   return WasmResult::Ok;
 }
 
@@ -804,9 +864,16 @@ WasmResult Context::removeHeaderMapValue(WasmHeaderMapType type, std::string_vie
   }
   const Http::LowerCaseString lower_key{std::string(key)};
   map->remove(lower_key);
+#if defined(ALIMESH)
+  if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
+      !disable_clear_route_cache_) {
+    decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
+  }
+#else
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
   }
+#endif
   return WasmResult::Ok;
 }
 
@@ -818,9 +885,16 @@ WasmResult Context::replaceHeaderMapValue(WasmHeaderMapType type, std::string_vi
   }
   const Http::LowerCaseString lower_key{std::string(key)};
   map->setCopy(lower_key, toAbslStringView(value));
+#if defined(ALIMESH)
+  if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
+      !disable_clear_route_cache_) {
+    decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
+  }
+#else
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
   }
+#endif
   return WasmResult::Ok;
 }
 
@@ -879,12 +953,59 @@ BufferInterface* Context::getBuffer(WasmBufferType type) {
           std::string_view(static_cast<const char*>(body.linearize(body.length())), body.length()));
     }
     return nullptr;
+#if defined(ALIMESH)
+  case WasmBufferType::RedisCallResponse:
+    return buffer_.set(rootContext()->redis_call_response_);
+#endif
   case WasmBufferType::GrpcReceiveBuffer:
     return buffer_.set(rootContext()->grpc_receive_buffer_.get());
   default:
     return nullptr;
   }
 }
+
+#if defined(ALIMESH)
+/**
+ * The goal here is to have the wasm filter cache the original body when replacing the entire body
+ * using the backup_for_replace mechanism of modifyDecodingBuffer. A special case to consider here
+ * is when a complete body is passed in a single decodeData call and the filter does not return
+ * StopIterationAndBuffer. In this scenario, buffering_request_body_ is false, but it's possible
+ * that an upper layer filter has performed the buffering, necessitating operations on the
+ * decodingBuffer. Another possibility is that the body is small and completed in a single
+ * decodeData call. This scenario can be managed by returning StopIteration at the decodeHeader
+ * stage to enable buffering. Furthermore, buffering_request_body_ being false indicates
+ * streaming, and modifications to the buffer itself should always be avoided in such cases.
+ */
+WasmResult Context::setBuffer(WasmBufferType type, size_t start, size_t length,
+                              std::string_view data) {
+  switch (type) {
+  case WasmBufferType::HttpRequestBody:
+    if (decoder_callbacks_ && decoder_callbacks_->decodingBuffer() != nullptr) {
+      // We need the mutable version, so capture it using a callback.
+      // TODO: consider adding a mutableDecodingBuffer() interface.
+      ::Envoy::Buffer::Instance* buffer_instance{};
+      bool backup_for_replace = false;
+      // When a body replacement occurs, back up the original body.
+      if (start == 0 && length >= decoder_callbacks_->decodingBuffer()->length()) {
+        backup_for_replace = true;
+      }
+      decoder_callbacks_->modifyDecodingBuffer(
+          [&buffer_instance](::Envoy::Buffer::Instance& buffer) { buffer_instance = &buffer; },
+          backup_for_replace);
+      if (buffering_request_body_) {
+        return buffer_.set(buffer_instance)->copyFrom(start, length, data);
+      }
+    }
+    return buffer_.set(request_body_buffer_)->copyFrom(start, length, data);
+  default:
+    auto* buffer = getBuffer(type);
+    if (buffer == nullptr) {
+      return WasmResult::NotFound;
+    }
+    return buffer->copyFrom(start, length, data);
+  }
+}
+#endif
 
 void Context::onDownstreamConnectionClose(CloseType close_type) {
   ContextBase::onDownstreamConnectionClose(close_type);
@@ -958,6 +1079,87 @@ WasmResult Context::httpCall(std::string_view cluster, const Pairs& request_head
   *token_ptr = token;
   return WasmResult::Ok;
 }
+
+#if defined(ALIMESH)
+WasmResult Context::redisInit(std::string_view cluster, std::string_view username,
+                              std::string_view password, int timeout_milliseconds) {
+  auto cluster_string = std::string(cluster.substr(0, cluster.find('?')));
+  const auto thread_local_cluster = clusterManager().getThreadLocalCluster(cluster_string);
+  if (thread_local_cluster == nullptr) {
+    return WasmResult::BadArgument;
+  }
+
+  Redis::AsyncClientConfig config(std::string(username), std::string(password),
+                                  timeout_milliseconds, Http::Utility::parseQueryString(cluster));
+  thread_local_cluster->redisAsyncClient().initialize(config);
+
+  return WasmResult::Ok;
+}
+
+WasmResult Context::redisCall(std::string_view cluster, std::string_view query,
+                              uint32_t* token_ptr) {
+  auto cluster_string = std::string(cluster.substr(0, cluster.find('?')));
+  const auto thread_local_cluster = clusterManager().getThreadLocalCluster(cluster_string);
+  if (thread_local_cluster == nullptr) {
+    return WasmResult::BadArgument;
+  }
+
+  uint32_t token = wasm()->nextRedisCallId();
+  auto& handler = redis_request_[token];
+  handler.context_ = this;
+  handler.token_ = token;
+
+  auto redis_request = thread_local_cluster->redisAsyncClient().send(std::string(query), handler);
+  if (!redis_request) {
+    redis_request_.erase(token);
+    return WasmResult::InternalFailure;
+  }
+  handler.request_ = redis_request;
+  *token_ptr = token;
+  return WasmResult::Ok;
+}
+
+void Context::onRedisCallSuccess(uint32_t token, std::string&& response) {
+  if (proxy_wasm::current_context_ != nullptr) {
+    // We are in a reentrant call, so defer.
+    wasm()->addAfterVmCallAction([this, token, response = std::move(response)]() mutable {
+      onRedisCallSuccess(token, std::move(response));
+    });
+    return;
+  }
+
+  auto handler = redis_request_.find(token);
+  if (handler == redis_request_.end()) {
+    return;
+  }
+
+  uint32_t body_size = response.size();
+  redis_call_response_ = std::move(response);
+  proxy_wasm::ContextBase::onRedisCallResponse(
+      token, static_cast<uint32_t>(proxy_wasm::RedisStatus::Ok), body_size);
+  redis_call_response_.clear();
+  redis_request_.erase(handler);
+}
+
+void Context::onRedisCallFailure(uint32_t token) {
+  if (proxy_wasm::current_context_ != nullptr) {
+    // We are in a reentrant call, so defer.
+    wasm()->addAfterVmCallAction([this, token] { onRedisCallFailure(token); });
+    return;
+  }
+
+  auto handler = redis_request_.find(token);
+  if (handler == redis_request_.end()) {
+    return;
+  }
+  status_code_ = static_cast<uint32_t>(WasmResult::BrokenConnection);
+  status_message_ = "reset";
+  proxy_wasm::ContextBase::onRedisCallResponse(
+      token, static_cast<uint32_t>(proxy_wasm::RedisStatus::NetworkError), 0);
+  status_message_ = "";
+  redis_request_.erase(handler);
+}
+#endif
 
 WasmResult Context::grpcCall(std::string_view grpc_service, std::string_view service_name,
                              std::string_view method_name, const Pairs& initial_metadata,
@@ -1104,6 +1306,12 @@ WasmResult Context::setProperty(std::string_view path, std::string_view value) {
   if (!stream_info) {
     return WasmResult::NotFound;
   }
+#ifdef ALIMESH
+  if (absl::StartsWith(path, CustomeTraceSpanTagPrefix)) {
+    stream_info->setCustomSpanTag(path.substr(CustomeTraceSpanTagPrefix.size()), value);
+    return WasmResult::Ok;
+  }
+#endif
   std::string key;
   absl::StrAppend(&key, CelStateKeyPrefix, toAbslStringView(path));
   CelState* state = stream_info->filterState()->getDataMutable<CelState>(key);
@@ -1119,6 +1327,21 @@ WasmResult Context::setProperty(std::string_view path, std::string_view value) {
                                         StreamInfo::FilterState::StateType::Mutable,
                                         prototype.life_span_);
   }
+#if defined(ALIMESH)
+  if (path == ClearRouteCacheKey) {
+    disable_clear_route_cache_ = value == DisableClearRouteCache;
+  } else if (path == SetDecoderBufferLimit && decoder_callbacks_) {
+    uint32_t buffer_limit;
+    if (stringViewToUint32(value, buffer_limit)) {
+      decoder_callbacks_->setDecoderBufferLimit(buffer_limit);
+    }
+  } else if (path == SetEncoderBufferLimit && encoder_callbacks_) {
+    uint32_t buffer_limit;
+    if (stringViewToUint32(value, buffer_limit)) {
+      encoder_callbacks_->setEncoderBufferLimit(buffer_limit);
+    }
+  }
+#endif
   if (!state->setValue(toAbslStringView(value))) {
     return WasmResult::BadArgument;
   }
@@ -1334,6 +1557,11 @@ Context::~Context() {
   for (auto& p : grpc_stream_) {
     p.second.stream_->resetStream();
   }
+#if defined(ALIMESH)
+  for (auto& p : redis_request_) {
+    p.second.request_->cancel();
+  }
+#endif
 }
 
 Network::FilterStatus convertNetworkFilterStatus(proxy_wasm::FilterStatus status) {
@@ -1398,7 +1626,11 @@ Network::FilterStatus Context::onNewConnection() {
 };
 
 Network::FilterStatus Context::onData(::Envoy::Buffer::Instance& data, bool end_stream) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Network::FilterStatus::Continue;
   }
   network_downstream_data_buffer_ = &data;
@@ -1411,7 +1643,11 @@ Network::FilterStatus Context::onData(::Envoy::Buffer::Instance& data, bool end_
 }
 
 Network::FilterStatus Context::onWrite(::Envoy::Buffer::Instance& data, bool end_stream) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Network::FilterStatus::Continue;
   }
   network_upstream_data_buffer_ = &data;
@@ -1429,7 +1665,11 @@ Network::FilterStatus Context::onWrite(::Envoy::Buffer::Instance& data, bool end
 }
 
 void Context::onEvent(Network::ConnectionEvent event) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return;
   }
   switch (event) {
@@ -1462,7 +1702,11 @@ void Context::log(const Http::RequestHeaderMap* request_headers,
   if (!stream_info.requestComplete().has_value()) {
     return;
   }
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     // If the request is invalid then onRequestHeaders() will not be called and neither will
     // onCreate() in cases like sendLocalReply who short-circuits envoy
     // lifecycle. This is because Envoy does not have a well defined lifetime for the combined
@@ -1667,7 +1911,11 @@ Http::FilterHeadersStatus Context::decodeHeaders(Http::RequestHeaderMap& headers
 }
 
 Http::FilterDataStatus Context::decodeData(::Envoy::Buffer::Instance& data, bool end_stream) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Http::FilterDataStatus::Continue;
   }
   request_body_buffer_ = &data;
@@ -1691,7 +1939,11 @@ Http::FilterDataStatus Context::decodeData(::Envoy::Buffer::Instance& data, bool
 }
 
 Http::FilterTrailersStatus Context::decodeTrailers(Http::RequestTrailerMap& trailers) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Http::FilterTrailersStatus::Continue;
   }
   request_trailers_ = &trailers;
@@ -1703,7 +1955,11 @@ Http::FilterTrailersStatus Context::decodeTrailers(Http::RequestTrailerMap& trai
 }
 
 Http::FilterMetadataStatus Context::decodeMetadata(Http::MetadataMap& request_metadata) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Http::FilterMetadataStatus::Continue;
   }
   request_metadata_ = &request_metadata;
@@ -1724,7 +1980,11 @@ Http::Filter1xxHeadersStatus Context::encode1xxHeaders(Http::ResponseHeaderMap&)
 
 Http::FilterHeadersStatus Context::encodeHeaders(Http::ResponseHeaderMap& headers,
                                                  bool end_stream) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Http::FilterHeadersStatus::Continue;
   }
   response_headers_ = &headers;
@@ -1737,7 +1997,11 @@ Http::FilterHeadersStatus Context::encodeHeaders(Http::ResponseHeaderMap& header
 }
 
 Http::FilterDataStatus Context::encodeData(::Envoy::Buffer::Instance& data, bool end_stream) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Http::FilterDataStatus::Continue;
   }
   response_body_buffer_ = &data;
@@ -1761,7 +2025,11 @@ Http::FilterDataStatus Context::encodeData(::Envoy::Buffer::Instance& data, bool
 }
 
 Http::FilterTrailersStatus Context::encodeTrailers(Http::ResponseTrailerMap& trailers) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Http::FilterTrailersStatus::Continue;
   }
   response_trailers_ = &trailers;
@@ -1773,7 +2041,11 @@ Http::FilterTrailersStatus Context::encodeTrailers(Http::ResponseTrailerMap& tra
 }
 
 Http::FilterMetadataStatus Context::encodeMetadata(Http::MetadataMap& response_metadata) {
+#if defined(ALIMESH)
+  if (destroyed_ || !in_vm_context_created_) {
+#else
   if (!in_vm_context_created_) {
+#endif
     return Http::FilterMetadataStatus::Continue;
   }
   response_metadata_ = &response_metadata;

@@ -142,6 +142,11 @@ public:
   MOCK_METHOD(bool, isShadow, (), (const, override));
   MOCK_METHOD(void, setDownstreamTransportFailureReason, (absl::string_view failure_reason));
   MOCK_METHOD(absl::string_view, downstreamTransportFailureReason, (), (const));
+#ifdef ALIMESH
+  MOCK_METHOD(void, setCustomSpanTag, (absl::string_view, absl::string_view));
+  MOCK_METHOD((const absl::flat_hash_map<std::string, std::string>&), getCustomSpanTagMap, (), (const));
+#endif
+
   Envoy::Event::SimulatedTimeSystem ts_;
   SystemTime start_time_;
   MonotonicTime start_time_monotonic_;

@@ -165,6 +165,15 @@ public:
   virtual void onRespValue(RespValuePtr&& value) PURE;
 };
 
+#if defined(ALIMESH)
+class RawDecoderCallbacks {
+public:
+  virtual ~RawDecoderCallbacks() = default;
+
+  virtual void onRawResponse(std::string&& response) PURE;
+};
+#endif
+
 /**
  * A redis byte decoder for https://redis.io/topics/protocol
  */
@@ -195,6 +204,15 @@ public:
   virtual DecoderPtr create(DecoderCallbacks& callbacks) PURE;
 };
 
+#if defined(ALIMESH)
+class RawDecoderFactory {
+public:
+  virtual ~RawDecoderFactory() = default;
+
+  virtual DecoderPtr create(RawDecoderCallbacks& callbacks) PURE;
+};
+#endif
+
 /**
  * A redis byte encoder for https://redis.io/topics/protocol
  */
@@ -211,6 +229,17 @@ public:
 };
 
 using EncoderPtr = std::unique_ptr<Encoder>;
+
+#if defined(ALIMESH)
+class RawEncoder {
+public:
+  virtual ~RawEncoder() = default;
+
+  virtual void encode(std::string_view value, Buffer::Instance& out) PURE;
+};
+
+using RawEncoderPtr = std::unique_ptr<RawEncoder>;
+#endif
 
 /**
  * A redis protocol error.

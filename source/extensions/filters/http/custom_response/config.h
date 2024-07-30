@@ -36,11 +36,17 @@ public:
   PolicySharedPtr getPolicy(const ::Envoy::Http::ResponseHeaderMap& headers,
                             const StreamInfo::StreamInfo& stream_info) const;
 
+#if defined(ALIMESH)
+  bool withRequestBody() const { return max_request_bytes_ > 0; }
+  uint32_t maxRequestBytes() const { return max_request_bytes_; }
+#endif
+
   ~FilterConfig() override = default;
 
 private:
   Stats::StatName stats_prefix_;
   const Matcher::MatchTreePtr<::Envoy::Http::HttpMatchingData> matcher_;
+  const uint32_t max_request_bytes_;
 };
 
 } // namespace CustomResponse

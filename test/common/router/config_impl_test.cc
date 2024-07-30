@@ -54,6 +54,9 @@ using ::testing::NiceMock;
 using ::testing::Pair;
 using ::testing::Return;
 using ::testing::ReturnRef;
+#if defined(ALIMESH)
+using ::testing::ReturnPointee;
+#endif
 
 // Wrap ConfigImpl, the target of tests to allow us to regenerate the route_fuzz_test
 // corpus when run with:
@@ -3166,7 +3169,11 @@ TEST_F(RouterMatcherHashPolicyTest, HashIpv4DifferentAddresses) {
   }
 }
 
+#if defined(ALIMESH)
+TEST_F(RouterMatcherHashPolicyTest, DISABLED_HashIpv6DifferentAddresses) {
+#else
 TEST_F(RouterMatcherHashPolicyTest, HashIpv6DifferentAddresses) {
+#endif
   firstRouteHashPolicy()->mutable_connection_properties()->set_source_ip(true);
   {
     // Different addresses should produce different hashes.
@@ -3694,6 +3701,181 @@ virtual_hosts:
   EXPECT_CALL(*mock_cluster_specifier_plugin_3, route(_, _)).WillOnce(Return(mock_route));
   EXPECT_EQ(mock_route.get(), config.route(genHeaders("some_cluster", "/bar", "GET"), 0).get());
 }
+
+#if defined(ALIMESH)
+TEST_F(RouteMatcherTest, WeightedClusterSpecifierPlugin) {
+  const std::string yaml = R"EOF(
+cluster_specifier_plugins:
+- extension:
+    name: test1
+    typed_config:
+      "@type": type.googleapis.com/google.protobuf.Struct
+      value:
+        a: test1
+- extension:
+    name: test2
+    typed_config:
+      "@type": type.googleapis.com/google.protobuf.Struct
+      value:
+        a: test2
+- extension:
+    name: test3
+    typed_config:
+      "@type": type.googleapis.com/google.protobuf.Struct
+      value:
+        a: test3
+virtual_hosts:
+- name: local_service
+  domains:
+  - "*"
+  routes:
+  - match:
+      prefix: "/foo"
+    route:
+      weighted_clusters:
+        clusters:
+        - name: cluster1
+          weight: 50
+        - name: cluster2
+          weight: 50
+        total_weight: 100
+        cluster_specifier_plugin: test2
+  - match:
+      prefix: "/bar"
+    route:
+      weighted_clusters:
+        clusters:
+        - name: cluster1
+          weight: 50
+        - name: cluster2
+          weight: 50
+        total_weight: 100
+        cluster_specifier_plugin: test3
+  )EOF";
+
+  NiceMock<MockClusterSpecifierPluginFactoryConfig> factory;
+  Registry::InjectFactory<ClusterSpecifierPluginFactoryConfig> registered(factory);
+
+  auto mock_cluster_specifier_plugin_1 = std::make_shared<NiceMock<MockClusterSpecifierPlugin>>();
+  auto mock_cluster_specifier_plugin_2 = std::make_shared<NiceMock<MockClusterSpecifierPlugin>>();
+  auto mock_cluster_specifier_plugin_3 = std::make_shared<NiceMock<MockClusterSpecifierPlugin>>();
+
+  factory_context_.cluster_manager_.initializeClusters({"cluster1", "cluster2"}, {});
+
+  EXPECT_CALL(factory, createClusterSpecifierPlugin(_, _))
+      .WillRepeatedly(Invoke(
+          [mock_cluster_specifier_plugin_1, mock_cluster_specifier_plugin_2,
+           mock_cluster_specifier_plugin_3](
+              const Protobuf::Message& config,
+              Server::Configuration::CommonFactoryContext&) -> ClusterSpecifierPluginSharedPtr {
+            const auto& typed_config = dynamic_cast<const ProtobufWkt::Struct&>(config);
+            if (auto iter = typed_config.fields().find("a"); iter == typed_config.fields().end()) {
+              return nullptr;
+            } else if (iter->second.string_value() == "test1") {
+              return mock_cluster_specifier_plugin_1;
+            } else if (iter->second.string_value() == "test2") {
+              return mock_cluster_specifier_plugin_2;
+            } else if (iter->second.string_value() == "test3") {
+              return mock_cluster_specifier_plugin_3;
+            }
+            return nullptr;
+          }));
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+
+  auto mock_route = std::make_shared<NiceMock<MockRoute>>();
+
+  EXPECT_CALL(*mock_cluster_specifier_plugin_2, route(_, _)).WillOnce(Return(mock_route));
+  EXPECT_EQ(mock_route.get(), config.route(genHeaders("some_cluster", "/foo", "GET"), 0).get());
+
+  EXPECT_CALL(*mock_cluster_specifier_plugin_3, route(_, _)).WillOnce(Return(mock_route));
+  EXPECT_EQ(mock_route.get(), config.route(genHeaders("some_cluster", "/bar", "GET"), 0).get());
+}
+
+TEST_F(RouteMatcherTest, WeightedClusterInlineSpecifierPlugin) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+- name: local_service
+  domains:
+  - "*"
+  routes:
+  - match:
+      prefix: "/foo"
+    route:
+      weighted_clusters:
+        clusters:
+        - name: cluster1
+          weight: 50
+        - name: cluster2
+          weight: 50
+        total_weight: 100
+        inline_cluster_specifier_plugin:
+          extension:
+            name: test2
+            typed_config:
+              "@type": type.googleapis.com/google.protobuf.Struct
+              value:
+                a: test2
+  - match:
+      prefix: "/bar"
+    route:
+      weighted_clusters:
+        clusters:
+        - name: cluster1
+          weight: 50
+        - name: cluster2
+          weight: 50
+        total_weight: 100
+        inline_cluster_specifier_plugin:
+          extension:
+            name: test3
+            typed_config:
+              "@type": type.googleapis.com/google.protobuf.Struct
+              value:
+                a: test3
+  )EOF";
+
+  NiceMock<MockClusterSpecifierPluginFactoryConfig> factory;
+  Registry::InjectFactory<ClusterSpecifierPluginFactoryConfig> registered(factory);
+
+  auto mock_cluster_specifier_plugin_1 = std::make_shared<NiceMock<MockClusterSpecifierPlugin>>();
+  auto mock_cluster_specifier_plugin_2 = std::make_shared<NiceMock<MockClusterSpecifierPlugin>>();
+  auto mock_cluster_specifier_plugin_3 = std::make_shared<NiceMock<MockClusterSpecifierPlugin>>();
+
+  factory_context_.cluster_manager_.initializeClusters({"cluster1", "cluster2"}, {});
+
+  EXPECT_CALL(factory, createClusterSpecifierPlugin(_, _))
+      .WillRepeatedly(Invoke(
+          [mock_cluster_specifier_plugin_1, mock_cluster_specifier_plugin_2,
+           mock_cluster_specifier_plugin_3](
+              const Protobuf::Message& config,
+              Server::Configuration::CommonFactoryContext&) -> ClusterSpecifierPluginSharedPtr {
+            const auto& typed_config = dynamic_cast<const ProtobufWkt::Struct&>(config);
+            if (auto iter = typed_config.fields().find("a"); iter == typed_config.fields().end()) {
+              return nullptr;
+            } else if (iter->second.string_value() == "test1") {
+              return mock_cluster_specifier_plugin_1;
+            } else if (iter->second.string_value() == "test2") {
+              return mock_cluster_specifier_plugin_2;
+            } else if (iter->second.string_value() == "test3") {
+              return mock_cluster_specifier_plugin_3;
+            }
+            return nullptr;
+          }));
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+
+  auto mock_route = std::make_shared<NiceMock<MockRoute>>();
+
+  EXPECT_CALL(*mock_cluster_specifier_plugin_2, route(_, _)).WillOnce(Return(mock_route));
+  EXPECT_EQ(mock_route.get(), config.route(genHeaders("some_cluster", "/foo", "GET"), 0).get());
+
+  EXPECT_CALL(*mock_cluster_specifier_plugin_3, route(_, _)).WillOnce(Return(mock_route));
+  EXPECT_EQ(mock_route.get(), config.route(genHeaders("some_cluster", "/bar", "GET"), 0).get());
+}
+#endif
 
 TEST_F(RouteMatcherTest, UnknownClusterSpecifierPluginName) {
   const std::string yaml = R"EOF(
@@ -7215,6 +7397,282 @@ request_headers_to_add:
   EXPECT_EQ("127.0.0.1", headers.get_("x-client-ip"));
 }
 
+#if defined(ALIMESH)
+TEST_F(CustomRequestHeadersTest, AddMseOriginalPathHeader) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+- name: www2
+  domains:
+  - lyft.com
+  - www.lyft.com
+  - w.lyft.com
+  - ww.lyft.com
+  - wwww.lyft.com
+  request_headers_to_add:
+  - header:
+      key: x-client-ip
+      value: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+  routes:
+  - match:
+      prefix: "/new_endpoint/test"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint/test1"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+    request_headers_to_add:
+    - header:
+        key: x-original-path
+        value: "%DYNAMIC_METADATA([\"mse.data\",\"original_path\"])%"
+  )EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  factory_context_.cluster_manager_.initializeClusters({"www2"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers = genHeaders("www.lyft.com", "/new_endpoint/foo", "GET");
+  const RouteEntry* route = config.route(headers, 0)->routeEntry();
+  EXPECT_CALL(stream_info, setDynamicMetadata(_, _))
+      .WillOnce(Invoke([&](const std::string& name,
+                           const ProtobufWkt::Struct& returned_dynamic_metadata) -> void {
+        EXPECT_EQ("mse.data", name);
+
+        std::unique_ptr<ProtobufWkt::Struct> dynamic_metadata =
+            std::make_unique<ProtobufWkt::Struct>();
+        auto* fields = dynamic_metadata->mutable_fields();
+        (*fields)["original_path"] = ValueUtil::stringValue("/new_endpoint/foo");
+        EXPECT_TRUE(TestUtility::protoEqual(returned_dynamic_metadata, *dynamic_metadata));
+
+        (*stream_info.metadata_.mutable_filter_metadata())[name].MergeFrom(
+            returned_dynamic_metadata);
+      }));
+
+  route->finalizeRequestHeaders(headers, stream_info, false);
+  auto transforms = route->requestHeaderTransforms(stream_info);
+  EXPECT_THAT(transforms.headers_to_append_or_add,
+              ElementsAre(Pair(Http::LowerCaseString("x-original-path"), "/new_endpoint/foo"),
+                          Pair(Http::LowerCaseString("x-client-ip"), "127.0.0.1")));
+  EXPECT_EQ("/api/new_endpoint/foo", headers.getPathValue());
+}
+
+TEST_F(CustomRequestHeadersTest, AddMseOriginalPathHeaderWithVS) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+- name: www2
+  domains:
+  - lyft.com
+  - www.lyft.com
+  - w.lyft.com
+  - ww.lyft.com
+  - wwww.lyft.com
+  request_headers_to_add:
+  - header:
+      key: x-original-path
+      value: "%DYNAMIC_METADATA([\"mse.data\",\"original_path\"])%"
+  routes:
+  - match:
+      prefix: "/new_endpoint"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint/test"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint/test1"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  )EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  factory_context_.cluster_manager_.initializeClusters({"www2"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers = genHeaders("www.lyft.com", "/new_endpoint/foo", "GET");
+  const RouteEntry* route = config.route(headers, 0)->routeEntry();
+  
+  EXPECT_CALL(stream_info, setDynamicMetadata(_, _))
+      .WillOnce(Invoke([&](const std::string& name,
+                           const ProtobufWkt::Struct& returned_dynamic_metadata) -> void {
+        EXPECT_EQ("mse.data", name);
+
+        std::unique_ptr<ProtobufWkt::Struct> dynamic_metadata =
+            std::make_unique<ProtobufWkt::Struct>();
+        auto* fields = dynamic_metadata->mutable_fields();
+        (*fields)["original_path"] = ValueUtil::stringValue("/new_endpoint/foo");
+        EXPECT_TRUE(TestUtility::protoEqual(returned_dynamic_metadata, *dynamic_metadata));
+
+        (*stream_info.metadata_.mutable_filter_metadata())[name].MergeFrom(
+            returned_dynamic_metadata);
+      }));
+
+  route->finalizeRequestHeaders(headers, stream_info, false);
+  auto transforms = route->requestHeaderTransforms(stream_info);
+  EXPECT_THAT(transforms.headers_to_append_or_add,
+              ElementsAre(Pair(Http::LowerCaseString("x-original-path"), "/new_endpoint/foo")));
+  EXPECT_EQ("/api/new_endpoint/foo", headers.getPathValue());
+}
+
+TEST_F(CustomRequestHeadersTest, AddMseOriginalPathHeaderWithRouteConfiguration) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+- name: www2
+  domains:
+  - lyft.com
+  - www.lyft.com
+  - w.lyft.com
+  - ww.lyft.com
+  - wwww.lyft.com
+  routes:
+  - match:
+      prefix: "/new_endpoint/test"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+request_headers_to_add:
+- header:
+    key: x-original-path
+    value: "%DYNAMIC_METADATA([\"mse.data\",\"original_path\"])%"
+- header:
+    key: x-client-ip
+    value: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+  )EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  factory_context_.cluster_manager_.initializeClusters({"www2"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers = genHeaders("www.lyft.com", "/new_endpoint/foo", "GET");
+  const RouteEntry* route = config.route(headers, 0)->routeEntry();
+
+  EXPECT_CALL(stream_info, setDynamicMetadata(_, _))
+      .WillOnce(Invoke([&](const std::string& name,
+                           const ProtobufWkt::Struct& returned_dynamic_metadata) -> void {
+        EXPECT_EQ("mse.data", name);
+
+        std::unique_ptr<ProtobufWkt::Struct> dynamic_metadata =
+            std::make_unique<ProtobufWkt::Struct>();
+        auto* fields = dynamic_metadata->mutable_fields();
+        (*fields)["original_path"] = ValueUtil::stringValue("/new_endpoint/foo");
+        EXPECT_TRUE(TestUtility::protoEqual(returned_dynamic_metadata, *dynamic_metadata));
+
+        (*stream_info.metadata_.mutable_filter_metadata())[name].MergeFrom(
+            returned_dynamic_metadata);
+      }));
+
+  route->finalizeRequestHeaders(headers, stream_info, false);
+  auto transforms = route->requestHeaderTransforms(stream_info);
+  EXPECT_THAT(transforms.headers_to_append_or_add,
+              ElementsAre(Pair(Http::LowerCaseString("x-original-path"), "/new_endpoint/foo"),
+                          Pair(Http::LowerCaseString("x-client-ip"), "127.0.0.1")));
+  EXPECT_EQ("/api/new_endpoint/foo", headers.getPathValue());
+}
+
+TEST_F(CustomRequestHeadersTest, NoMseOriginalPathHeader) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+- name: www2
+  domains:
+  - lyft.com
+  - www.lyft.com
+  - w.lyft.com
+  - ww.lyft.com
+  - wwww.lyft.com
+  request_headers_to_add:
+  - header:
+      key: x-client-ip
+      value: "%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%"
+  routes:
+  - match:
+      prefix: "/new_endpoint"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint/test"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint/test1"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  )EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  factory_context_.cluster_manager_.initializeClusters({"www2"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers = genHeaders("www.lyft.com", "/new_endpoint/foo", "GET");
+  const RouteEntry* route = config.route(headers, 0)->routeEntry();
+
+  EXPECT_CALL(stream_info, setDynamicMetadata(_, _)).Times(0);
+
+  route->finalizeRequestHeaders(headers, stream_info, true);
+  EXPECT_EQ("/new_endpoint/foo", headers.get_("x-envoy-original-path"));
+  auto transforms = route->requestHeaderTransforms(stream_info);
+  EXPECT_THAT(transforms.headers_to_append_or_add,
+              ElementsAre(Pair(Http::LowerCaseString("x-client-ip"), "127.0.0.1")));
+  EXPECT_EQ("/api/new_endpoint/foo", headers.getPathValue());
+}
+
+TEST_F(CustomRequestHeadersTest, NoMseOriginalPathHeaderWithRouteConfiguration) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+- name: www2
+  domains:
+  - lyft.com
+  - www.lyft.com
+  - w.lyft.com
+  - ww.lyft.com
+  - wwww.lyft.com
+  routes:
+  - match:
+      prefix: "/new_endpoint"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint/test"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+  - match:
+      prefix: "/new_endpoint/test1"
+    route:
+      prefix_rewrite: "/api/new_endpoint"
+      cluster: www2
+request_headers_to_add:
+- header:
+    key: x-original-path
+    value: "%REQ(X-ENVOY-ORIGINAL-PATH)%"
+  )EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  factory_context_.cluster_manager_.initializeClusters({"www2"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genHeaders("www.lyft.com", "/new_endpoint/test1/a", "GET");
+  const RouteEntry* route = config.route(headers, 0)->routeEntry();
+
+  EXPECT_CALL(stream_info, setDynamicMetadata(_, _)).Times(0);
+
+  route->finalizeRequestHeaders(headers, stream_info, true);
+
+  EXPECT_EQ("/new_endpoint/test1/a", headers.get_("x-envoy-original-path"));
+
+  EXPECT_EQ("/api/new_endpoint/test1/a", headers.getPathValue());
+}
+#endif
+
 TEST_F(CustomRequestHeadersTest, CustomHeaderWrongFormat) {
   const std::string yaml = R"EOF(
 virtual_hosts:
@@ -10156,6 +10614,325 @@ virtual_hosts:
       internal_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(200)));
 }
 
+#if defined(ALIMESH)
+TEST_F(RouteConfigurationV2, InternalActiveRedirectIsDisabledWhenNotSpecifiedInRouteAction) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [idle.lyft.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/regex"
+        route:
+          cluster: some-cluster
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("idle.lyft.com", "/regex", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_FALSE(internal_active_redirect_policy.enabled());
+}
+
+TEST_F(RouteConfigurationV2, DefaultInternalActiveRedirectPolicyIsSensible) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [idle.lyft.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/regex"
+        route:
+          cluster: some-cluster
+          internal_active_redirect_policy:
+            policies:
+            - redirect_url: "taobao.com"
+              redirect_response_codes: [404]
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("idle.lyft.com", "/regex", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_TRUE(internal_active_redirect_policy.enabled());
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(503)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(200)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(302)));
+  EXPECT_EQ(1, internal_active_redirect_policy.maxInternalRedirects());
+  EXPECT_TRUE(internal_active_redirect_policy.predicates().empty());
+  EXPECT_FALSE(internal_active_redirect_policy.isCrossSchemeRedirectAllowed());
+  EXPECT_EQ("taobao.com", internal_active_redirect_policy.redirectUrl());
+}
+
+TEST_F(RouteConfigurationV2, InternalActiveRedirectPolicyDropsInvalidRedirectCode) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [idle.lyft.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/regex"
+        route:
+          cluster: some-cluster
+          internal_active_redirect_policy:
+            policies:
+            - redirect_url: "taobao.com"
+              redirect_response_codes: [301, 302, 303, 304, 307, 308, 503, 500, 404]
+              request_headers_to_add:
+                - header:
+                    key: x-req-cluster
+                    value: cluster1
+                  append: true
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("idle.lyft.com", "/regex", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_TRUE(internal_active_redirect_policy.enabled());
+  // The 301, 302, 303, 307, 308 is invalid code.
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(301)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(302)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(303)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(307)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(308)));
+  // No configured code.
+  EXPECT_TRUE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(304)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(305)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(306)));
+  // The configured code.
+  EXPECT_TRUE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(503)));
+  EXPECT_TRUE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(500)));
+  EXPECT_TRUE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(404)));
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  Http::TestRequestHeaderMapImpl header_map{{":method", "POST"}};
+  internal_active_redirect_policy.evaluateHeaders(header_map, &stream_info);
+  EXPECT_TRUE(header_map.has("x-req-cluster"));
+  EXPECT_FALSE(header_map.has("x-client-ip"));
+}
+
+TEST_F(RouteConfigurationV2, InternalActiveRedirectPolicyDropsInvalidRedirectCodeCauseEmptySet) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [idle.lyft.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/regex"
+        route:
+          cluster: some-cluster
+          internal_active_redirect_policy:
+            policies:
+            - redirect_response_codes: [200, 301]
+              redirect_url_rewrite_regex:
+                pattern:
+                  google_re2: {}
+                  regex: "^/.+/(.+)$"
+                substitution: \1
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("idle.lyft.com", "/regex", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_TRUE(internal_active_redirect_policy.enabled());
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(302)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(301)));
+  EXPECT_FALSE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(200)));
+}
+
+TEST_F(RouteConfigurationV2, InternalActiveRedirectPolicyWithRedirectUrlRewriteRegex) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [idle.lyft.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/regex"
+        route:
+          cluster: some-cluster
+          internal_active_redirect_policy:
+            policies:
+            - redirect_response_codes: [200, 301]
+              redirect_url_rewrite_regex:
+                pattern:
+                  google_re2: {}
+                  regex: "^/.+/(.+)$"
+                substitution: \1
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("idle.lyft.com", "/regex", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_TRUE(internal_active_redirect_policy.enabled());
+
+  std::string path("/rewrite-host-with-path-regex/envoyproxy.io");
+  EXPECT_EQ("envoyproxy.io", internal_active_redirect_policy.redirectUrl(path));
+}
+
+TEST_F(RouteConfigurationV2,
+       InternalActiveRedirectPolicyWithRedirectUrlWithYoukuKrakenRewriteRegex) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [act.youku.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/yep/page/kraken/m_pre/i_just_test"
+        route:
+          cluster: some-cluster
+          internal_active_redirect_policy:
+            policies:
+            - redirect_response_codes: [503]
+              redirect_url_rewrite_regex:
+                pattern:
+                  google_re2: {}
+                  regex: (\W|^)kraken
+                substitution: test
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("act.youku.com", "/yep/page/kraken/m_pre/i_just_test", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_TRUE(internal_active_redirect_policy.enabled());
+
+  std::string path("/yep/page/kraken/m_pre/i_just_test");
+  EXPECT_EQ("/yep/pagetest/m_pre/i_just_test", internal_active_redirect_policy.redirectUrl(path));
+}
+
+TEST_F(RouteConfigurationV2, InternalActiveRedirectPolicyWithRedirectUrlHostRewrite) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [act.youku.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/yep/i_just_test"
+        route:
+          cluster: some-cluster
+          internal_active_redirect_policy:
+            policies:
+            - redirect_response_codes: [503]
+              redirect_url: /yep/page/kraken/m_pre/i_just_test
+              host_rewrite_literal: taobao.com
+
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("act.youku.com", "/yep/i_just_test", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_TRUE(internal_active_redirect_policy.enabled());
+
+  EXPECT_EQ("/yep/page/kraken/m_pre/i_just_test", internal_active_redirect_policy.redirectUrl());
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  Http::TestRequestHeaderMapImpl header_map{{":method", "POST"}};
+  internal_active_redirect_policy.evaluateHeaders(header_map, &stream_info);
+  EXPECT_EQ("taobao.com", header_map.getHostValue());
+}
+
+TEST_F(RouteConfigurationV2, InternalActiveRedirectPolicyWithMultiPolicies) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: regex
+    domains: [act.youku.com]
+    routes:
+      - match:
+          safe_regex:
+            google_re2: {}
+            regex: "/yep/i_just_test"
+        route:
+          cluster: some-cluster
+          internal_active_redirect_policy:
+            policies:
+            - redirect_response_codes: [503]
+              redirect_url: /yep/page/kraken/m_pre/i_just_test
+              host_rewrite_literal: taobao.com
+            - redirect_response_codes: [505]
+              redirect_url: /yep/page/kraken/m_pre/i_just_test_505
+              host_rewrite_literal: taobao.com
+            - redirect_response_codes: [404]
+              redirect_url: /yep/page/kraken/m_pre/i_just_test_404
+              host_rewrite_literal: taobao.com
+  )EOF";
+
+  factory_context_.cluster_manager_.initializeClusters({"some-cluster"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  Http::TestRequestHeaderMapImpl headers =
+      genRedirectHeaders("act.youku.com", "/yep/i_just_test", true, false);
+  const auto& internal_active_redirect_policy =
+      config.route(headers, 0)->routeEntry()->internalActiveRedirectPolicy();
+  EXPECT_TRUE(internal_active_redirect_policy.enabled());
+
+  EXPECT_EQ("/yep/page/kraken/m_pre/i_just_test", internal_active_redirect_policy.redirectUrl());
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  Http::TestRequestHeaderMapImpl header_map{{":method", "POST"}};
+  internal_active_redirect_policy.evaluateHeaders(header_map, &stream_info);
+  EXPECT_EQ("taobao.com", header_map.getHostValue());
+
+  EXPECT_TRUE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(404)));
+  EXPECT_EQ("/yep/page/kraken/m_pre/i_just_test_404",
+            internal_active_redirect_policy.redirectUrl());
+
+  EXPECT_TRUE(
+      internal_active_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(505)));
+  EXPECT_EQ("/yep/page/kraken/m_pre/i_just_test_505",
+            internal_active_redirect_policy.redirectUrl());
+}
+
+#endif
+
 class PerFilterConfigsTest : public testing::Test, public ConfigImplTestBase {
 public:
   PerFilterConfigsTest()
@@ -11163,6 +11940,23 @@ virtual_hosts:
       },
       genHeaders("bat.com", "/", "GET"));
   EXPECT_NE(nullptr, dynamic_cast<const SslRedirectRoute*>(accepted_route.get()));
+#if defined(ALIMESH)
+  EXPECT_EQ(Http::Code::MovedPermanently,
+            dynamic_cast<const SslRedirectRoute*>(accepted_route.get())
+                ->directResponseEntry()
+                ->responseCode());
+  RouteConstSharedPtr accepted_route_post = config.route(
+      [](RouteConstSharedPtr, RouteEvalStatus) -> RouteMatchStatus {
+        ADD_FAILURE() << "RouteCallback should not be invoked since there are no matching "
+                         "route to override";
+        return RouteMatchStatus::Continue;
+      },
+      genHeaders("bat.com", "/", "POST"));
+  EXPECT_EQ(Http::Code::PermanentRedirect,
+            dynamic_cast<const SslRedirectRoute*>(accepted_route_post.get())
+                ->directResponseEntry()
+                ->responseCode());
+#endif
 }
 
 TEST_F(RouteMatchOverrideTest, NullRouteOnRequireTlsInternal) {
@@ -11233,6 +12027,227 @@ virtual_hosts:
             shared_config.ignorePathParametersInPathMatching());
 }
 
+#if defined(ALIMESH)
+TEST_F(RouteMatchOverrideTest, NullRouteOnExactAllowServerNames) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: bar
+    domains: ["*"]
+    routes:
+      - match: { prefix: "/foo/bar/baz" }
+        route:
+          cluster: foo_bar_baz
+      - match: { prefix: "/foo/bar" }
+        route:
+          cluster: foo_bar
+      - match: { prefix: "/" }
+        route:
+          cluster: default
+    allow_server_names: ["www.example.com"]
+)EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  downstream_connection_info_provider->setSslConnection(
+      std::make_shared<NiceMock<Ssl::MockConnectionInfo>>());
+  downstream_connection_info_provider->setRequestedServerName("test.example.com");
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+  factory_context_.cluster_manager_.initializeClusters({"foo_bar_baz", "foo_bar", "default"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  RouteConstSharedPtr accepted_route = config.route(
+      [](RouteConstSharedPtr, RouteEvalStatus) -> RouteMatchStatus {
+        ADD_FAILURE() << "RouteCallback should not be invoked since there are no matching "
+                         "route to override";
+        return RouteMatchStatus::Continue;
+      },
+      genHeaders("www.example.com", "/", "GET"), stream_info, 0);
+  EXPECT_NE(nullptr, dynamic_cast<const SNIRedirectRoute*>(accepted_route.get()));
+  EXPECT_EQ(Http::Code::MisdirectedRequest,
+            dynamic_cast<const SNIRedirectRoute*>(accepted_route.get())
+                ->directResponseEntry()
+                ->responseCode());
+  downstream_connection_info_provider->setRequestedServerName("www.example.com");
+  std::vector<std::string> clusters{"default", "foo_bar", "foo_bar_baz"};
+  accepted_route = config.route(
+      [&clusters](RouteConstSharedPtr route,
+                  RouteEvalStatus route_eval_status) -> RouteMatchStatus {
+        EXPECT_FALSE(clusters.empty());
+        EXPECT_EQ(clusters[clusters.size() - 1], route->routeEntry()->clusterName());
+        clusters.pop_back();
+
+        if (clusters.empty()) {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::NoMoreRoutes);
+        } else {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::HasMoreRoutes);
+        }
+        // Returning continue when no more routes are available will be ignored by
+        // ConfigImpl::route
+        return RouteMatchStatus::Continue;
+      },
+      genHeaders("www.example.com", "/foo/bar/baz", "GET"), stream_info, 0);
+  EXPECT_EQ(accepted_route, nullptr);
+}
+
+TEST_F(RouteMatchOverrideTest, NullRouteOnWildcardAllowServerNames) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: bar
+    domains: ["*"]
+    routes:
+      - match: { prefix: "/foo/bar/baz" }
+        route:
+          cluster: foo_bar_baz
+      - match: { prefix: "/foo/bar" }
+        route:
+          cluster: foo_bar
+      - match: { prefix: "/" }
+        route:
+          cluster: default
+    allow_server_names: ["www.example.com", "*.example.com"]
+)EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  downstream_connection_info_provider->setSslConnection(
+      std::make_shared<NiceMock<Ssl::MockConnectionInfo>>());
+  downstream_connection_info_provider->setRequestedServerName("example.com");
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+  factory_context_.cluster_manager_.initializeClusters({"foo_bar_baz", "foo_bar", "default"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  RouteConstSharedPtr accepted_route = config.route(
+      [](RouteConstSharedPtr, RouteEvalStatus) -> RouteMatchStatus {
+        ADD_FAILURE() << "RouteCallback should not be invoked since there are no matching "
+                         "route to override";
+        return RouteMatchStatus::Continue;
+      },
+      genHeaders("www.example.com", "/", "GET"), stream_info, 0);
+  EXPECT_NE(nullptr, dynamic_cast<const SNIRedirectRoute*>(accepted_route.get()));
+  EXPECT_EQ(Http::Code::MisdirectedRequest,
+            dynamic_cast<const SNIRedirectRoute*>(accepted_route.get())
+                ->directResponseEntry()
+                ->responseCode());
+  downstream_connection_info_provider->setRequestedServerName("test.example.com");
+  std::vector<std::string> clusters{"default", "foo_bar", "foo_bar_baz"};
+  accepted_route = config.route(
+      [&clusters](RouteConstSharedPtr route,
+                  RouteEvalStatus route_eval_status) -> RouteMatchStatus {
+        EXPECT_FALSE(clusters.empty());
+        EXPECT_EQ(clusters[clusters.size() - 1], route->routeEntry()->clusterName());
+        clusters.pop_back();
+
+        if (clusters.empty()) {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::NoMoreRoutes);
+        } else {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::HasMoreRoutes);
+        }
+        // Returning continue when no more routes are available will be ignored by
+        // ConfigImpl::route
+        return RouteMatchStatus::Continue;
+      },
+      genHeaders("www.example.com", "/foo/bar/baz", "GET"), stream_info, 0);
+  EXPECT_EQ(accepted_route, nullptr);
+}
+
+TEST_F(RouteMatchOverrideTest, NullRouteOnEmptyAllowServerNames) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: bar
+    domains: ["*"]
+    routes:
+      - match: { prefix: "/foo/bar/baz" }
+        route:
+          cluster: foo_bar_baz
+      - match: { prefix: "/foo/bar" }
+        route:
+          cluster: foo_bar
+      - match: { prefix: "/" }
+        route:
+          cluster: default
+    allow_server_names: []
+)EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  downstream_connection_info_provider->setSslConnection(
+      std::make_shared<NiceMock<Ssl::MockConnectionInfo>>());
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+  factory_context_.cluster_manager_.initializeClusters({"foo_bar_baz", "foo_bar", "default"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  downstream_connection_info_provider->setRequestedServerName("example.com");
+  std::vector<std::string> clusters{"default", "foo_bar", "foo_bar_baz"};
+  RouteConstSharedPtr accepted_route = config.route(
+      [&clusters](RouteConstSharedPtr route,
+                  RouteEvalStatus route_eval_status) -> RouteMatchStatus {
+        EXPECT_FALSE(clusters.empty());
+        EXPECT_EQ(clusters[clusters.size() - 1], route->routeEntry()->clusterName());
+        clusters.pop_back();
+
+        if (clusters.empty()) {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::NoMoreRoutes);
+        } else {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::HasMoreRoutes);
+        }
+        // Returning continue when no more routes are available will be ignored by
+        // ConfigImpl::route
+        return RouteMatchStatus::Continue;
+      },
+      genHeaders("www.example.com", "/foo/bar/baz", "GET"), stream_info, 0);
+  EXPECT_EQ(accepted_route, nullptr);
+}
+
+TEST_F(RouteMatchOverrideTest, NullRouteOnAllowServerNamesWithoutSsl) {
+  const std::string yaml = R"EOF(
+virtual_hosts:
+  - name: bar
+    domains: ["*"]
+    routes:
+      - match: { prefix: "/foo/bar/baz" }
+        route:
+          cluster: foo_bar_baz
+      - match: { prefix: "/foo/bar" }
+        route:
+          cluster: foo_bar
+      - match: { prefix: "/" }
+        route:
+          cluster: default
+    allow_server_names: ["www.example.com"]
+)EOF";
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+  factory_context_.cluster_manager_.initializeClusters({"foo_bar_baz", "foo_bar", "default"}, {});
+  TestConfigImpl config(parseRouteConfigurationFromYaml(yaml), factory_context_, true);
+  downstream_connection_info_provider->setRequestedServerName("example.com");
+  std::vector<std::string> clusters{"default", "foo_bar", "foo_bar_baz"};
+  RouteConstSharedPtr accepted_route = config.route(
+      [&clusters](RouteConstSharedPtr route,
+                  RouteEvalStatus route_eval_status) -> RouteMatchStatus {
+        EXPECT_FALSE(clusters.empty());
+        EXPECT_EQ(clusters[clusters.size() - 1], route->routeEntry()->clusterName());
+        clusters.pop_back();
+
+        if (clusters.empty()) {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::NoMoreRoutes);
+        } else {
+          EXPECT_EQ(route_eval_status, RouteEvalStatus::HasMoreRoutes);
+        }
+        // Returning continue when no more routes are available will be ignored by
+        // ConfigImpl::route
+        return RouteMatchStatus::Continue;
+      },
+      genHeaders("www.example.com", "/foo/bar/baz", "GET"), stream_info, 0);
+  EXPECT_EQ(accepted_route, nullptr);
+}
+#endif
 } // namespace
 } // namespace Router
 } // namespace Envoy

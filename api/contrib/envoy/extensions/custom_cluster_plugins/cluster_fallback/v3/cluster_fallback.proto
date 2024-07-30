@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package envoy.extensions.custom_cluster_plugins.cluster_fallback.v3;
+
+import "udpa/annotations/sensitive.proto";
+import "udpa/annotations/status.proto";
+import "validate/validate.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.custom_cluster_plugins.cluster_fallback.v3";
+option java_outer_classname = "ClusterFallbackProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/envoy/extensions/custom_cluster_plugins/cluster_fallback/v3;cluster_fallbackv3";
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+message ClusterFallbackConfig {
+  message ClusterConfig {
+    string routing_cluster = 1;
+
+    repeated string fallback_clusters = 2;
+  }
+
+  message WeightedClusterConfig {
+    repeated ClusterConfig config = 1;
+  }
+
+  oneof config_specifier {
+    ClusterConfig cluster_config = 1;
+
+    WeightedClusterConfig weighted_cluster_config = 2;
+  }
+}

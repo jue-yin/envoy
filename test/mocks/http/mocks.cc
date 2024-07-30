@@ -73,6 +73,21 @@ template <class T> static void initializeMockStreamFilterCallbacks(T& callbacks)
 MockStreamDecoderFilterCallbacks::MockStreamDecoderFilterCallbacks() {
   initializeMockStreamFilterCallbacks(*this);
   ON_CALL(*this, decodingBuffer()).WillByDefault(Invoke(&buffer_, &Buffer::InstancePtr::get));
+#if defined(ALIMESH)
+  ON_CALL(*this, modifyDecodingBuffer(_, _))
+      .WillByDefault(Invoke(
+          [this](std::function<void(Buffer::Instance&)> callback, bool backup_for_replace) -> void {
+            if (backup_for_replace) {
+              Buffer::InstancePtr tmp_data = std::make_unique<Buffer::OwnedImpl>();
+              tmp_data->move(*buffer_.get());
+            }
+            callback(*buffer_.get());
+          }));
+  ON_CALL(*this, modifyDecodingBuffer(_))
+      .WillByDefault(Invoke([this](std::function<void(Buffer::Instance&)> callback) -> void {
+        callback(*buffer_.get());
+      }));
+#endif
 
   ON_CALL(*this, addDownstreamWatermarkCallbacks(_))
       .WillByDefault(Invoke([this](DownstreamWatermarkCallbacks& callbacks) -> void {

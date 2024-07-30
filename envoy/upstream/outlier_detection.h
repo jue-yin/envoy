@@ -110,6 +110,10 @@ public:
    * and LocalOrigin type returns success rate for local origin errors.
    */
   virtual double successRate(SuccessRateMonitorType type) const PURE;
+
+#if defined(ALIMESH)
+  virtual void forceEjectHost() PURE;
+#endif
 };
 
 using DetectorHostMonitorPtr = std::unique_ptr<DetectorHostMonitor>;

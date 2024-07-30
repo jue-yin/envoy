@@ -77,6 +77,16 @@ public:
     return &downstream_connection_;
   }
 
+#if defined(ALIMESH)
+  Http::FilterHeadersStatus decodeHeaders(Http::RequestHeaderMap& headers,
+                                          bool end_stream) override {
+    auto status = Filter::decodeHeaders(headers, end_stream);
+    // TODO: deletes the header and consider using custom headers.
+    headers.remove(Http::CustomHeaders::get().AliExtendedValues.TriStartTime);
+    return status;
+  }
+#endif
+
   NiceMock<Network::MockConnection> downstream_connection_;
   MockRetryState* retry_state_{};
 };

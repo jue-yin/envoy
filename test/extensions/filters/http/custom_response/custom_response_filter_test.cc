@@ -39,6 +39,10 @@ public:
     filter_ = std::make_unique<CustomResponseFilter>(config_);
     filter_->setEncoderFilterCallbacks(encoder_callbacks_);
     filter_->setDecoderFilterCallbacks(decoder_callbacks_);
+#if defined(ALIMESH)
+    ON_CALL(decoder_callbacks_, recreateStream(_)).WillByDefault(Return(true));
+    ON_CALL(decoder_callbacks_, recreateStream(_, _)).WillByDefault(Return(true));
+#endif
   }
 
   void createConfig(const absl::string_view config_str = kDefaultConfig) {
@@ -91,7 +95,11 @@ TEST_F(CustomResponseFilterTest, RemoteData) {
   ::Envoy::Http::TestRequestHeaderMapImpl request_headers{};
   EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
             ::Envoy::Http::FilterHeadersStatus::Continue);
+#if defined(ALIMESH)
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, false));
+#else
   EXPECT_CALL(decoder_callbacks_, recreateStream(_));
+#endif
   EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
             ::Envoy::Http::FilterHeadersStatus::StopIteration);
 }
@@ -206,6 +214,383 @@ TEST_F(CustomResponseFilterTest, InvalidSchemeRedirect) {
       stats_store_.findCounterByString("stats.custom_response_invalid_uri").value().get().value());
 }
 
+#if defined(ALIMESH)
+TEST_F(CustomResponseFilterTest, SingleRedirectCustomStatus) {
+  // Create config with invalid scheme field.
+  createConfig(R"EOF(
+  custom_response_matcher:
+    matcher_list:
+      matchers:
+        # Redirect to different upstream if the status code is one of 502.
+      - predicate:
+          single_predicate:
+            input:
+              name: "502_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "502"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              status_code: 299
+              max_internal_redirects: 1
+              uri: "https://foo.example/gateway_error"
+              response_headers_to_add:
+              - header:
+                  key: "foo2"
+                  value: "x-bar2"
+)EOF");
+  setupFilterAndCallback();
+
+  setServerName("server1.example.foo");
+  ::Envoy::Http::TestResponseHeaderMapImpl response_headers{{":status", "502"}};
+  ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+#if defined(ALIMESH)
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, false));
+#else
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_));
+#endif
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("foo.example", request_headers.getHostValue());
+  // new stream
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ("299", response_headers.getStatusValue());
+  EXPECT_EQ(
+      "x-bar2",
+      response_headers.get(::Envoy::Http::LowerCaseString("foo2"))[0]->value().getStringView());
+}
+
+TEST_F(CustomResponseFilterTest, MultiRedirectCustomStatus) {
+  // Create config with invalid scheme field.
+  createConfig(R"EOF(
+  custom_response_matcher:
+    matcher_list:
+      matchers:
+        # Redirect to different upstream if the status code is one of 502.
+      - predicate:
+          single_predicate:
+            input:
+              name: "502_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "502"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              status_code: 299
+              max_internal_redirects: 2
+              uri: "https://foo.example/gateway_error"
+              response_headers_to_add:
+              - header:
+                  key: "foo1"
+                  value: "x-bar1"
+              request_headers_to_add:
+              - header:
+                  key: "foo2"
+                  value: "x-bar2"
+      - predicate:
+          single_predicate:
+            input:
+              name: "503_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "503"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              status_code: 298
+              max_internal_redirects: 2
+              uri: "https://bar.example/gateway_error"
+              response_headers_to_add:
+              - header:
+                  key: "foo2"
+                  value: "x-bar2"
+)EOF");
+  setupFilterAndCallback();
+
+  setServerName("server1.example.foo");
+  ::Envoy::Http::TestResponseHeaderMapImpl response_headers{{":status", "502"}};
+  ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, false)).Times(2);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("foo.example", request_headers.getHostValue());
+  EXPECT_EQ("x-bar2", request_headers.getByKey("foo2"));
+  EXPECT_EQ("502", response_headers.getStatusValue());
+  EXPECT_TRUE(response_headers.get(::Envoy::Http::LowerCaseString("foo1")).empty());
+  // new stream
+  response_headers = {{":status", "503"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("503", response_headers.getStatusValue());
+  EXPECT_TRUE(response_headers.get(::Envoy::Http::LowerCaseString("foo2")).empty());
+  // new stream
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ("298", response_headers.getStatusValue());
+  EXPECT_TRUE(response_headers.get(::Envoy::Http::LowerCaseString("foo1")).empty());
+  EXPECT_EQ(
+      "x-bar2",
+      response_headers.get(::Envoy::Http::LowerCaseString("foo2"))[0]->value().getStringView());
+}
+
+TEST_F(CustomResponseFilterTest, KeepOriginalResponseCode) {
+  // Create config with invalid scheme field.
+  createConfig(R"EOF(
+  custom_response_matcher:
+    matcher_list:
+      matchers:
+        # Redirect to different upstream if the status code is one of 502.
+      - predicate:
+          single_predicate:
+            input:
+              name: "502_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "502"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              max_internal_redirects: 1
+              uri: "https://foo.example/gateway_error"
+)EOF");
+  setupFilterAndCallback();
+
+  setServerName("server1.example.foo");
+  ::Envoy::Http::TestResponseHeaderMapImpl response_headers{{":status", "502"}};
+  ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, false));
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("foo.example", request_headers.getHostValue());
+  response_headers = {{":status", "200"}};
+  // new stream
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ("502", response_headers.getStatusValue());
+}
+
+TEST_F(CustomResponseFilterTest, DontKeepOriginalResponseCode) {
+  // Create config with invalid scheme field.
+  createConfig(R"EOF(
+  custom_response_matcher:
+    matcher_list:
+      matchers:
+        # Redirect to different upstream if the status code is one of 502.
+      - predicate:
+          single_predicate:
+            input:
+              name: "502_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "502"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              max_internal_redirects: 1
+              uri: "https://foo.example/gateway_error"
+              keep_original_response_code: false
+)EOF");
+  setupFilterAndCallback();
+
+  setServerName("server1.example.foo");
+  ::Envoy::Http::TestResponseHeaderMapImpl response_headers{{":status", "502"}};
+  ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, false));
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("foo.example", request_headers.getHostValue());
+  response_headers = {{":status", "200"}};
+  // new stream
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ("200", response_headers.getStatusValue());
+}
+
+TEST_F(CustomResponseFilterTest, UseOriginalRequest) {
+  // Create config with invalid scheme field.
+  createConfig(R"EOF(
+  custom_response_matcher:
+    matcher_list:
+      matchers:
+        # Redirect to different upstream if the status code is one of 502.
+      - predicate:
+          single_predicate:
+            input:
+              name: "502_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "502"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              max_internal_redirects: 1
+              use_original_request_uri: true
+              keep_original_response_code: false
+)EOF");
+  setupFilterAndCallback();
+
+  setServerName("server1.example.foo");
+  ::Envoy::Http::TestResponseHeaderMapImpl response_headers{{":status", "502"}};
+  ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"},
+                                                          {":path", "/example"},
+                                                          {"X-Envoy-Original-Host", "foo.example"},
+                                                          {"X-Envoy-Original-Path", "/foo"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, false));
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("foo.example", request_headers.getHostValue());
+  EXPECT_EQ("/foo", request_headers.getPathValue());
+  response_headers = {{":status", "200"}};
+  // new stream
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ("200", response_headers.getStatusValue());
+}
+
+TEST_F(CustomResponseFilterTest, UseOriginalRequestBody) {
+  // Create config with invalid scheme field.
+  createConfig(R"EOF(
+  custom_response_matcher:
+    matcher_list:
+      matchers:
+        # Redirect to different upstream if the status code is one of 502.
+      - predicate:
+          single_predicate:
+            input:
+              name: "502_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "502"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              max_internal_redirects: 1
+              use_original_request_uri: true
+              use_original_request_body: true
+              keep_original_response_code: false
+)EOF");
+  setupFilterAndCallback();
+
+  setServerName("server1.example.foo");
+  ::Envoy::Http::TestResponseHeaderMapImpl response_headers{{":status", "502"}};
+  ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"},
+                                                          {":path", "/example"},
+                                                          {"X-Envoy-Original-Host", "foo.example"},
+                                                          {"X-Envoy-Original-Path", "/foo"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, true));
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("foo.example", request_headers.getHostValue());
+  EXPECT_EQ("/foo", request_headers.getPathValue());
+  response_headers = {{":status", "200"}};
+  // new stream
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ("200", response_headers.getStatusValue());
+}
+
+TEST_F(CustomResponseFilterTest, OnlyRedirectUpstreamCode) {
+  // Create config with invalid scheme field.
+  createConfig(R"EOF(
+  custom_response_matcher:
+    matcher_list:
+      matchers:
+        # Redirect to different upstream if the status code is one of 502.
+      - predicate:
+          single_predicate:
+            input:
+              name: "502_response"
+              typed_config:
+                "@type": type.googleapis.com/envoy.type.matcher.v3.HttpResponseStatusCodeMatchInput
+            value_match:
+              exact: "502"
+        on_match:
+          action:
+            name: gateway_error_action
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.http.custom_response.redirect_policy.v3.RedirectPolicy
+              max_internal_redirects: 1
+              use_original_request_uri: true
+              use_original_request_body: true
+              keep_original_response_code: false
+              only_redirect_upstream_code: true
+)EOF");
+  setupFilterAndCallback();
+
+  setServerName("server1.example.foo");
+  ::Envoy::Http::TestResponseHeaderMapImpl response_headers{{":status", "502"}};
+  ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"},
+                                                          {":path", "/example"},
+                                                          {"X-Envoy-Original-Host", "foo.example"},
+                                                          {"X-Envoy-Original-Path", "/foo"}};
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_EQ("example.foo", request_headers.getHostValue());
+  EXPECT_EQ("/example", request_headers.getPathValue());
+  encoder_callbacks_.streamInfo().setResponseCodeDetails(
+      ::Envoy::StreamInfo::ResponseCodeDetails::get().ViaUpstream);
+  EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
+            ::Envoy::Http::FilterHeadersStatus::Continue);
+  EXPECT_CALL(decoder_callbacks_, recreateStream(_, true));
+  EXPECT_EQ(filter_->encodeHeaders(response_headers, true),
+            ::Envoy::Http::FilterHeadersStatus::StopIteration);
+  EXPECT_EQ("foo.example", request_headers.getHostValue());
+  EXPECT_EQ("/foo", request_headers.getPathValue());
+}
+
+#endif
 } // namespace
 } // namespace CustomResponse
 } // namespace HttpFilters

@@ -673,6 +673,13 @@ config_setting(
     define_values = {"FUZZING_ENGINE": "oss-fuzz"},
 )
 
+# By default we enable AliMesh build. If want to build community
+# version then build Envoy with flag of '--define alimesh=false'.
+config_setting(
+    name = "alimesh",
+    values = {"define": "alimesh=false"},
+)
+
 alias(
     name = "fuzzing_engine",
     actual = select({

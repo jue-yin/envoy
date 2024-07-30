@@ -35,6 +35,10 @@ public:
   MOCK_METHOD(double, successRate, (DetectorHostMonitor::SuccessRateMonitorType type), (const));
   MOCK_METHOD(void, successRate,
               (DetectorHostMonitor::SuccessRateMonitorType type, double new_success_rate));
+
+#if defined(ALIMESH)
+  MOCK_METHOD(void, forceEjectHost, ());
+#endif
 };
 
 class MockEventLogger : public EventLogger {

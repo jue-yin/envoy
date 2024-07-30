@@ -16,7 +16,11 @@
 namespace Envoy {
 namespace Secret {
 
+#if defined(ALIMESH)
+class SecretManagerImpl : public SecretManager, public Logger::Loggable<Logger::Id::secret> {
+#else
 class SecretManagerImpl : public SecretManager {
+#endif
 public:
   SecretManagerImpl(OptRef<Server::ConfigTracker> config_tracker);
   void

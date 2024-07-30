@@ -528,6 +528,24 @@ TEST_P(WasmHttpFilterTest, BodyRequestReplaceBufferedBody) {
   filter().onDestroy();
 }
 
+#if defined(ALIMESH)
+// Script that replaces the batched buffered body.
+TEST_P(WasmHttpFilterTest, BodyRequestReplaceBatchedBufferedBody) {
+  setupTest("body");
+  setupFilter();
+  EXPECT_CALL(filter(), log_(spdlog::level::err, Eq(absl::string_view("onBody replace")))).Times(2);
+  Http::TestRequestHeaderMapImpl request_headers{{":path", "/"},
+                                                 {"x-test-operation", "ReplaceBufferedBody"}};
+  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter().decodeHeaders(request_headers, false));
+  Buffer::OwnedImpl data("hello");
+  EXPECT_EQ(Http::FilterDataStatus::StopIterationAndBuffer, filter().decodeData(data, false));
+  decoder_callbacks_.buffer_ = std::make_unique<Buffer::OwnedImpl>("replace");
+  EXPECT_CALL(decoder_callbacks_, modifyDecodingBuffer(_, true));
+  EXPECT_EQ(Http::FilterDataStatus::Continue, filter().decodeData(data, true));
+  filter().onDestroy();
+}
+#endif
+
 // Script that replaces the first character in the buffered body.
 TEST_P(WasmHttpFilterTest, BodyRequestPartialReplaceBufferedBody) {
   setupTest("body");
@@ -737,7 +755,107 @@ TEST_P(WasmHttpFilterTest, AccessLogCreate) {
                AccessLog::AccessLogType::NotSet);
   filter().onDestroy();
 }
+#if defined(ALIMESH)
+TEST_P(WasmHttpFilterTest, RedisCall) {
+  if (std::get<1>(GetParam()) == "rust") {
+    // This feature is not supported in rust
+    return;
+  }
 
+  setupTest("redis_call");
+  setupFilter();
+
+  Http::TestRequestHeaderMapImpl request_headers{{":path", "/"}};
+  std::string redis_query{"*3\r\n$3\r\nset\r\n$2\r\nid\r\n$1\r\n1\r\n"};
+  Redis::MockRedisPoolRequest redis_request(
+      &cluster_manager_.thread_local_cluster_.redis_async_client_, std::string(redis_query));
+  Redis::AsyncClient::Callbacks* callbacks = nullptr;
+  cluster_manager_.initializeThreadLocalClusters({"cluster"});
+
+  EXPECT_CALL(cluster_manager_.thread_local_cluster_, redisAsyncClient());
+  EXPECT_CALL(cluster_manager_.thread_local_cluster_.redis_async_client_, send_(_, _))
+      .WillOnce(
+          Invoke([&](std::string& query, Redis::AsyncClient::Callbacks& cb) -> Redis::PoolRequest* {
+            EXPECT_EQ(redis_query, query);
+            callbacks = &cb;
+            return &redis_request;
+          }));
+
+  EXPECT_CALL(filter(), log_(spdlog::level::debug, Eq("+OK\r\n")));
+  EXPECT_CALL(filter(), log_(spdlog::level::warn, Eq("bodysize: 5")));
+  EXPECT_CALL(filter(), log_(spdlog::level::info, Eq("onRequestHeaders")))
+      .WillOnce(Invoke([&](uint32_t, absl::string_view) -> proxy_wasm::WasmResult {
+        std::string response{"+OK\r\n"};
+        callbacks->onSuccess(redis_request.request_, std::move(response));
+        return proxy_wasm::WasmResult::Ok;
+      }));
+  EXPECT_EQ(Http::FilterHeadersStatus::StopAllIterationAndWatermark,
+            filter().decodeHeaders(request_headers, false));
+
+  EXPECT_NE(callbacks, nullptr);
+}
+
+TEST_P(WasmHttpFilterTest, DisableClearRouteCache) {
+  if (std::get<1>(GetParam()) == "rust") {
+    // This feature is not supported in rust test code
+    return;
+  }
+
+  setupTest("", "DisableClearRouteCache");
+  setupFilter();
+  EXPECT_CALL(encoder_callbacks_, streamInfo()).WillRepeatedly(ReturnRef(request_stream_info_));
+  EXPECT_CALL(filter(), log_(spdlog::level::debug,
+                             Eq(absl::string_view("onRequestHeaders 2 DisableClearRouteCache"))));
+  EXPECT_CALL(filter(), log_(spdlog::level::info, Eq(absl::string_view("header path /"))));
+
+  // Verify that route cache is cleared when modifying HTTP request headers.
+  Http::MockStreamDecoderFilterCallbacks decoder_callbacks;
+  filter().setDecoderFilterCallbacks(decoder_callbacks);
+  EXPECT_CALL(decoder_callbacks.downstream_callbacks_, clearRouteCache()).Times(0);
+
+  Http::TestRequestHeaderMapImpl request_headers{{":path", "/"}, {"server", "envoy"}};
+  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter().decodeHeaders(request_headers, false));
+  EXPECT_THAT(request_headers.get_("newheader"), Eq("newheadervalue"));
+  EXPECT_THAT(request_headers.get_("server"), Eq("envoy-wasm"));
+  Http::TestRequestTrailerMapImpl request_trailers{};
+  EXPECT_EQ(Http::FilterTrailersStatus::Continue, filter().decodeTrailers(request_trailers));
+  Http::MetadataMap request_metadata{};
+  EXPECT_EQ(Http::FilterMetadataStatus::Continue, filter().decodeMetadata(request_metadata));
+}
+
+TEST_P(WasmHttpFilterTest, SetDecoderBufferLimit) {
+  if (std::get<1>(GetParam()) == "rust") {
+    // This feature is not supported in rust test code
+    return;
+  }
+
+  setupTest("", "SetDecoderBufferLimit");
+  setupFilter();
+  Http::MockStreamDecoderFilterCallbacks decoder_callbacks;
+  filter().setDecoderFilterCallbacks(decoder_callbacks);
+  Http::TestRequestHeaderMapImpl request_headers{{"x-buffer-size", "123456"}};
+  EXPECT_CALL(decoder_callbacks, setDecoderBufferLimit(123456));
+  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter().decodeHeaders(request_headers, false));
+}
+
+TEST_P(WasmHttpFilterTest, SetEncoderBufferLimit) {
+  if (std::get<1>(GetParam()) == "rust") {
+    // This feature is not supported in rust test code
+    return;
+  }
+
+  setupTest("", "SetEncoderBufferLimit");
+  setupFilter();
+  Http::MockStreamEncoderFilterCallbacks encoder_callbacks;
+  filter().setEncoderFilterCallbacks(encoder_callbacks);
+  EXPECT_CALL(encoder_callbacks, streamInfo()).WillRepeatedly(ReturnRef(request_stream_info_));
+  // Create in-VM context.
+  filter().onCreate();
+  Http::TestResponseHeaderMapImpl response_headers{{"x-buffer-size", "123456"}};
+  EXPECT_CALL(encoder_callbacks, setEncoderBufferLimit(123456));
+  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter().encodeHeaders(response_headers, false));
+}
+#endif
 TEST_P(WasmHttpFilterTest, AsyncCall) {
   setupTest("async_call");
   setupFilter();
@@ -1713,6 +1831,125 @@ TEST_P(WasmHttpFilterTest, GrpcStreamOpenAtShutdown) {
     wasm_.reset();
   }
 }
+
+#if defined(ALIMESH)
+TEST_P(WasmHttpFilterTest, GetRouteName) {
+  if (std::get<1>(GetParam()) == "rust") {
+    return;
+  }
+  setupTest("", "GetRouteName");
+  setupFilter();
+  Http::MockStreamDecoderFilterCallbacks decoder_callbacks;
+  filter().setDecoderFilterCallbacks(decoder_callbacks);
+  std::shared_ptr<Router::MockRoute> route{new NiceMock<Router::MockRoute>()};
+  std::string route_name = "my_route";
+  EXPECT_CALL(route->route_entry_, routeName()).WillRepeatedly(ReturnRef(route_name));
+  EXPECT_CALL(decoder_callbacks, route()).WillRepeatedly(Return(route));
+  EXPECT_CALL(filter(), log_(spdlog::level::info, Eq(absl::string_view("route name is my_route"))));
+  Http::TestRequestHeaderMapImpl request_headers{};
+  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter().decodeHeaders(request_headers, false));
+  filter().onDestroy();
+}
+TEST_P(WasmHttpFilterTest, RecoverFromCrash) {
+  auto runtime = std::get<0>(GetParam());
+  if (runtime == "null") {
+    return;
+  }
+  if (std::get<1>(GetParam()) != "cpp") {
+    return;
+  }
+  setupTest("", "CrashRecover");
+  setupFilter();
+  EXPECT_CALL(encoder_callbacks_, streamInfo()).WillRepeatedly(ReturnRef(request_stream_info_));
+  auto& crash_total = scope_->counterFromString("wasm.envoy.wasm.runtime." + runtime +
+                                                ".plugin.plugin_name.crash_total");
+  auto& crash_vm =
+      scope_->gaugeFromString("wasm.envoy.wasm.runtime." + runtime + ".plugin.plugin_name.crash",
+                              Stats::Gauge::ImportMode::NeverImport);
+  auto& recover_total = scope_->counterFromString("wasm.envoy.wasm.runtime." + runtime +
+                                                  ".plugin.plugin_name.recover_total");
+  auto& recover_error = scope_->counterFromString("wasm.envoy.wasm.runtime." + runtime +
+                                                  ".plugin.plugin_name.recover_error");
+  Http::MockStreamDecoderFilterCallbacks decoder_callbacks;
+  filter().setDecoderFilterCallbacks(decoder_callbacks);
+
+  EXPECT_EQ(0U, crash_total.value());
+  EXPECT_EQ(0U, crash_vm.value());
+  EXPECT_EQ(0U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  auto fail_headers = Http::TestResponseHeaderMapImpl{{":status", "503"}};
+  EXPECT_CALL(decoder_callbacks, encodeHeaders_(HeaderMapEqualRef(&fail_headers), true));
+  EXPECT_CALL(decoder_callbacks,
+              sendLocalReply(Envoy::Http::Code::ServiceUnavailable, testing::Eq(""), _,
+                             testing::Eq(Grpc::Status::WellKnownGrpcStatus::Unavailable),
+                             testing::Eq("wasm_fail_stream")));
+  Http::TestRequestHeaderMapImpl request_headers{{"crash", "true"}};
+  EXPECT_NE(Http::FilterHeadersStatus::Continue, filter().decodeHeaders(request_headers, false));
+  EXPECT_EQ(1U, crash_total.value());
+  EXPECT_EQ(1U, crash_vm.value());
+  EXPECT_EQ(0U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  doRecover<TestFilter>();
+  filter().onCreate();
+  request_headers = {};
+  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter().decodeHeaders(request_headers, false));
+  EXPECT_EQ(1U, crash_total.value());
+  EXPECT_EQ(0U, crash_vm.value());
+  EXPECT_EQ(1U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  Http::TestResponseHeaderMapImpl response_headers{{"crash", "true"}};
+  EXPECT_NE(Http::FilterHeadersStatus::Continue, filter().encodeHeaders(response_headers, false));
+  EXPECT_EQ(2U, crash_total.value());
+  EXPECT_EQ(1U, crash_vm.value());
+  EXPECT_EQ(1U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  doRecover<TestFilter>();
+  filter().onCreate();
+  response_headers = {};
+  EXPECT_EQ(Http::FilterHeadersStatus::Continue, filter().encodeHeaders(response_headers, false));
+  EXPECT_EQ(2U, crash_total.value());
+  EXPECT_EQ(0U, crash_vm.value());
+  EXPECT_EQ(2U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  Buffer::OwnedImpl invalid_data("crash");
+  Buffer::OwnedImpl normal_data("");
+
+  EXPECT_NE(Http::FilterDataStatus::Continue, filter().decodeData(invalid_data, false));
+  EXPECT_EQ(3U, crash_total.value());
+  EXPECT_EQ(1U, crash_vm.value());
+  EXPECT_EQ(2U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  doRecover<TestFilter>();
+  filter().onCreate();
+  EXPECT_EQ(Http::FilterDataStatus::Continue, filter().decodeData(normal_data, false));
+  EXPECT_EQ(3U, crash_total.value());
+  EXPECT_EQ(0U, crash_vm.value());
+  EXPECT_EQ(3U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  EXPECT_NE(Http::FilterDataStatus::Continue, filter().encodeData(invalid_data, false));
+  EXPECT_EQ(4U, crash_total.value());
+  EXPECT_EQ(1U, crash_vm.value());
+  EXPECT_EQ(3U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  doRecover<TestFilter>();
+  filter().onCreate();
+  EXPECT_EQ(Http::FilterDataStatus::Continue, filter().encodeData(normal_data, false));
+  EXPECT_EQ(4U, crash_total.value());
+  EXPECT_EQ(0U, crash_vm.value());
+  EXPECT_EQ(4U, recover_total.value());
+  EXPECT_EQ(0U, recover_error.value());
+
+  filter().onDestroy();
+}
+#endif
 
 // Test metadata access including CEL expressions.
 TEST_P(WasmHttpFilterTest, Metadata) {

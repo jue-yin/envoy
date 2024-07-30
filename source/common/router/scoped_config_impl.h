@@ -22,6 +22,12 @@ namespace Router {
 
 using envoy::extensions::filters::network::http_connection_manager::v3::ScopedRoutes;
 
+#if defined(ALIMESH)
+using ReComputeCb = std::function<std::unique_ptr<ScopeKeyFragmentBase>()>;
+using ReComputeCbPtr = std::shared_ptr<ReComputeCb>;
+using ReComputeCbWeakPtr = std::weak_ptr<ReComputeCb>;
+#endif
+
 /**
  * Base class for fragment builders.
  */
@@ -31,10 +37,16 @@ public:
       : config_(std::move(config)) {}
   virtual ~FragmentBuilderBase() = default;
 
+#if defined(ALIMESH)
+  virtual std::unique_ptr<ScopeKeyFragmentBase>
+  computeFragment(const Http::HeaderMap& headers, const StreamInfo::StreamInfo* info,
+                  ReComputeCbPtr& recompute) const PURE;
+#else
   // Returns a fragment if the fragment rule applies, a nullptr indicates no fragment could be
   // generated from the headers.
   virtual std::unique_ptr<ScopeKeyFragmentBase>
   computeFragment(const Http::HeaderMap& headers) const PURE;
+#endif
 
 protected:
   const ScopedRoutes::ScopeKeyBuilder::FragmentBuilder config_;
@@ -44,14 +56,52 @@ class HeaderValueExtractorImpl : public FragmentBuilderBase {
 public:
   explicit HeaderValueExtractorImpl(ScopedRoutes::ScopeKeyBuilder::FragmentBuilder&& config);
 
+#if defined(ALIMESH)
+  std::unique_ptr<ScopeKeyFragmentBase> computeFragment(const Http::HeaderMap& headers,
+                                                        const StreamInfo::StreamInfo* info,
+                                                        ReComputeCbPtr& recompute) const override;
+  std::unique_ptr<ScopeKeyFragmentBase> computeFragment(const Http::HeaderMap& headers) const;
+#else
   std::unique_ptr<ScopeKeyFragmentBase>
   computeFragment(const Http::HeaderMap& headers) const override;
+
+#endif
 
 private:
   const ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::HeaderValueExtractor&
       header_value_extractor_config_;
 };
 
+#if defined(ALIMESH)
+class HostValueExtractorImpl : public FragmentBuilderBase {
+public:
+  explicit HostValueExtractorImpl(ScopedRoutes::ScopeKeyBuilder::FragmentBuilder&& config);
+
+  std::unique_ptr<ScopeKeyFragmentBase> computeFragment(const Http::HeaderMap& headers,
+                                                        const StreamInfo::StreamInfo* info,
+                                                        ReComputeCbPtr& recompute) const override;
+
+private:
+  std::unique_ptr<ScopeKeyFragmentBase> reComputeHelper(const std::string& host,
+                                                        ReComputeCbWeakPtr& weak_next_recompute,
+                                                        uint32_t recompute_seq) const;
+
+  static constexpr uint32_t DefaultMaxRecomputeNum = 100;
+
+  const ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::HostValueExtractor&
+      host_value_extractor_config_;
+  const uint32_t max_recompute_num_;
+};
+
+class LocalPortValueExtractorImpl : public FragmentBuilderBase {
+public:
+  explicit LocalPortValueExtractorImpl(ScopedRoutes::ScopeKeyBuilder::FragmentBuilder&& config);
+
+  std::unique_ptr<ScopeKeyFragmentBase> computeFragment(const Http::HeaderMap& headers,
+                                                        const StreamInfo::StreamInfo* info,
+                                                        ReComputeCbPtr& recompute) const override;
+};
+#endif
 /**
  * Base class for ScopeKeyBuilder implementations.
  */
@@ -68,7 +118,14 @@ class ScopeKeyBuilderImpl : public ScopeKeyBuilderBase {
 public:
   explicit ScopeKeyBuilderImpl(ScopedRoutes::ScopeKeyBuilder&& config);
 
+#if defined(ALIMESH)
+  ScopeKeyPtr computeScopeKey(const Http::HeaderMap& headers, const StreamInfo::StreamInfo* info,
+                              std::function<ScopeKeyPtr()>& recompute) const override;
+  // only for test
   ScopeKeyPtr computeScopeKey(const Http::HeaderMap& headers) const override;
+#else
+  ScopeKeyPtr computeScopeKey(const Http::HeaderMap& headers) const override;
+#endif
 
 private:
   std::vector<std::unique_ptr<FragmentBuilderBase>> fragment_builders_;
@@ -118,8 +175,16 @@ public:
 
   void removeRoutingScopes(const std::vector<std::string>& scope_names);
 
-  // Envoy::Router::ScopedConfig
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr& scope_key) const override;
+
+#if defined(ALIMESH)
+  Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder* scope_key_builder,
+                                              const Http::HeaderMap& headers,
+                                              const StreamInfo::StreamInfo* info) const override;
+  ScopeKeyPtr computeScopeKey(const ScopeKeyBuilder* scope_key_builder,
+                              const Http::HeaderMap& headers,
+                              const StreamInfo::StreamInfo* info) const override;
+#endif
 
 private:
   // From scope name to cached ScopedRouteInfo.
@@ -136,6 +201,12 @@ public:
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr&) const override {
     return std::make_shared<const NullConfigImpl>();
   }
+#if defined(ALIMESH)
+  Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder*, const Http::HeaderMap&,
+                                              const StreamInfo::StreamInfo*) const override {
+    return std::make_shared<const NullConfigImpl>();
+  }
+#endif
 };
 
 } // namespace Router

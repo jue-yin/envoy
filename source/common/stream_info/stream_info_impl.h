@@ -404,6 +404,21 @@ struct StreamInfoImpl : public StreamInfo {
     return downstream_transport_failure_reason_;
   }
 
+#ifdef ALIMESH
+  void setCustomSpanTag(std::string_view key, std::string_view value) override {
+    auto it = custom_span_tags_.find(key);
+    if (it != custom_span_tags_.end()) {
+      it->second = value;
+    } else {
+      custom_span_tags_.emplace(key, value);
+    }
+  }
+
+  const absl::flat_hash_map<std::string, std::string>& getCustomSpanTagMap() const override {
+    return custom_span_tags_;
+  }
+#endif
+
   TimeSource& time_source_;
   SystemTime start_time_;
   MonotonicTime start_time_monotonic_;
@@ -460,6 +475,9 @@ private:
   BytesMeterSharedPtr downstream_bytes_meter_;
   bool is_shadow_{false};
   std::string downstream_transport_failure_reason_;
+#ifdef ALIMESH
+  absl::flat_hash_map<std::string, std::string> custom_span_tags_;
+#endif
 };
 
 } // namespace StreamInfo

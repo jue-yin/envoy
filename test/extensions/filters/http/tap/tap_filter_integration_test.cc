@@ -333,8 +333,13 @@ tap_config:
   admin_response_->waitForBodyData(1);
   envoy::data::tap::v3::TraceWrapper trace;
   TestUtility::loadFromYaml(admin_response_->body(), trace);
+#if defined(ALIMESH)
+  EXPECT_EQ(trace.http_buffered_trace().request().headers().size(), 10);
+  EXPECT_EQ(trace.http_buffered_trace().response().headers().size(), 7);
+#else
   EXPECT_EQ(trace.http_buffered_trace().request().headers().size(), 8);
   EXPECT_EQ(trace.http_buffered_trace().response().headers().size(), 4);
+#endif
   admin_response_->clearBody();
 
   // Do a request which should not tap.
@@ -346,11 +351,16 @@ tap_config:
   // Wait for the tap message.
   admin_response_->waitForBodyData(1);
   TestUtility::loadFromYaml(admin_response_->body(), trace);
+#if defined(ALIMESH)
+  EXPECT_EQ(trace.http_buffered_trace().request().headers().size(), 9);
+  EXPECT_EQ(trace.http_buffered_trace().response().headers().size(), 8);
+#else
   EXPECT_EQ(trace.http_buffered_trace().request().headers().size(), 7);
+  EXPECT_EQ(trace.http_buffered_trace().response().headers().size(), 5);
+#endif
   EXPECT_EQ(
       "http",
       findHeader("x-forwarded-proto", trace.http_buffered_trace().request().headers())->value());
-  EXPECT_EQ(trace.http_buffered_trace().response().headers().size(), 5);
   EXPECT_NE(nullptr, findHeader("date", trace.http_buffered_trace().response().headers()));
   EXPECT_EQ("baz", findHeader("bar", trace.http_buffered_trace().response().headers())->value());
 

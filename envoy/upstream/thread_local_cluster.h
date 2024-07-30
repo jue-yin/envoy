@@ -2,6 +2,7 @@
 
 #include "envoy/common/pure.h"
 #include "envoy/http/async_client.h"
+#include "envoy/redis/async_client.h"
 #include "envoy/tcp/async_tcp_client.h"
 #include "envoy/upstream/load_balancer.h"
 #include "envoy/upstream/upstream.h"
@@ -142,6 +143,9 @@ public:
    * owns the client.
    */
   virtual Http::AsyncClient& httpAsyncClient() PURE;
+#if defined(ALIMESH)
+  virtual Redis::AsyncClient& redisAsyncClient() PURE;
+#endif
 
   /**
    * @param context the optional load balancer context.

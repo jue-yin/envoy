@@ -70,6 +70,13 @@ private:
   // Remote source the request should be redirected to.
   const std::unique_ptr<const std::string> uri_;
   const std::unique_ptr<const ::Envoy::Http::Utility::RedirectConfig> redirect_action_;
+#if defined(ALIMESH)
+  bool use_original_request_uri_;
+  bool keep_original_response_code_;
+  uint32_t max_internal_redirects_;
+  bool use_original_request_body_;
+  bool only_redirect_upstream_code_;
+#endif
 
   const absl::optional<::Envoy::Http::Code> status_code_;
   const std::unique_ptr<Envoy::Router::HeaderParser> response_header_parser_;

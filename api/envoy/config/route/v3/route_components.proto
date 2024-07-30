@@ -219,6 +219,23 @@ message VirtualHost {
   // It takes precedence over the route config mirror policy entirely.
   // That is, policies are not merged, the most specific non-empty one becomes the mirror policies.
   repeated RouteAction.RequestMirrorPolicy request_mirror_policies = 22;
+
+  // If non-empty, a list of server names (such as SNI for the TLS protocol) is used to determine
+  // whether this request is allowed to access this VirutalHost. If not allowed, 421 Misdirected Request will be returned.
+  //
+  // The server name can be matched whith wildcard domains, i.e. ``www.example.com`` can be matched with
+  // ``www.example.com``, ``*.example.com`` and ``*.com``.
+  //
+  // Note that partial wildcards are not supported, and values like ``*w.example.com`` are invalid.
+  //
+  // This is useful when expose all virtual hosts to arbitrary HCM filters (such as using SRDS), and you want to make
+  // mTLS-protected routes invisible to requests with different SNIs.
+  //
+  // .. attention::
+  //
+  //   See the :ref:`FAQ entry <faq_how_to_setup_sni>` on how to configure SNI for more
+  //   information.
+  repeated string allow_server_names = 101;
 }
 
 // A filter-defined action type.
@@ -367,6 +384,7 @@ message Route {
 // multiple upstream clusters along with weights that indicate the percentage of
 // traffic to be forwarded to each cluster. The router selects an upstream cluster based on the
 // weights.
+// [#next-free-field: 102]
 message WeightedCluster {
   option (udpa.annotations.versioning).previous_message_type = "envoy.api.v2.route.WeightedCluster";
 
@@ -493,6 +511,16 @@ message WeightedCluster {
   // configuration file will be used as the default weight. See the :ref:`runtime documentation
   // <operations_runtime>` for how key names map to the underlying implementation.
   string runtime_key_prefix = 2;
+
+  // Name of the cluster specifier plugin to use to determine the cluster for requests on this route.
+  // The cluster specifier plugin name must be defined in the associated
+  // :ref:`cluster specifier plugins <envoy_v3_api_field_config.route.v3.RouteConfiguration.cluster_specifier_plugins>`
+  // in the :ref:`name <envoy_v3_api_field_config.core.v3.TypedExtensionConfig.name>` field.
+  string cluster_specifier_plugin = 100;
+
+  // Custom cluster specifier plugin configuration to use to determine the cluster for requests
+  // on this route.
+  ClusterSpecifierPlugin inline_cluster_specifier_plugin = 101;
 
   oneof random_value_specifier {
     // Specifies the header name that is used to look up the random value passed in the request header.
@@ -725,7 +753,7 @@ message CorsPolicy {
   google.protobuf.BoolValue allow_private_network_access = 12;
 }
 
-// [#next-free-field: 42]
+// [#next-free-field: 1001]
 message RouteAction {
   option (udpa.annotations.versioning).previous_message_type = "envoy.api.v2.route.RouteAction";
 
@@ -1377,6 +1405,8 @@ message RouteAction {
 
   // Specifies the maximum stream duration for this route.
   MaxStreamDuration max_stream_duration = 36;
+
+  InternalActiveRedirectPolicy internal_active_redirect_policy = 1000;
 }
 
 // HTTP retry :ref:`architecture overview <arch_overview_http_routing_retry>`.
@@ -2383,6 +2413,109 @@ message InternalRedirectPolicy {
   // Allow internal redirect to follow a target URI with a different scheme than the value of
   // x-forwarded-proto. The default is false.
   bool allow_cross_scheme_redirect = 4;
+}
+
+// Redirects to the specified URI based on the response code.
+// [#next-free-field: 22]
+message InternalActiveRedirectPolicy {
+  // [#next-free-field: 23]
+  message RedirectPolicy {
+    // An internal redirect is not handled, unless the number of previous internal redirects that a
+    // downstream request has encountered is lower than this value.
+    // In the case where a downstream request is bounced among multiple routes by internal redirect,
+    // the first route that hits this threshold, or does not set :ref:`internal_redirect_policy
+    // <envoy_api_field_config.route.v4alpha.RouteAction.internal_redirect_policy>`
+    // will pass the redirect back to downstream.
+    //
+    // If not specified, at most one redirect will be followed.
+    google.protobuf.UInt32Value max_internal_redirects = 10;
+
+    // Defines what upstream response codes are allowed to trigger internal redirect.
+    // All response codes support redirection except 200.
+    repeated uint32 redirect_response_codes = 11 [(validate.rules).repeated = {max_items: 50}];
+
+    // The URI of the redirect.
+    oneof redirect_url_rewrite_specifier {
+      option (validate.required) = true;
+
+      string redirect_url = 12 [(validate.rules).string = {min_len: 1}];
+
+      type.matcher.v3.RegexMatchAndSubstitute redirect_url_rewrite_regex = 13;
+    }
+
+    // Specifies a list of predicates that are queried when an upstream response is deemed
+    // to trigger an internal redirect by all other criteria. Any predicate in the list can reject
+    // the redirect, causing the response to be proxied to downstream.
+    repeated core.v3.TypedExtensionConfig predicates = 14;
+
+    // Allow internal redirect to follow a target URI with a different scheme than the value of
+    // x-forwarded-proto. The default is false.
+    bool allow_cross_scheme_redirect = 15;
+
+    // HTTP headers to add to a local reply. This allows the response mapper to append, to add
+    // or to override headers of any local reply before it is sent to a downstream client.
+    repeated core.v3.HeaderValueOption request_headers_to_add = 16
+        [(validate.rules).repeated = {max_items: 1000}];
+
+    // Indicates that during forwarding, the host header will be swapped with
+    // this value.
+    string host_rewrite_literal = 17
+        [(validate.rules).string = {well_known_regex: HTTP_HEADER_VALUE strict: false}];
+
+    // If true, the host name in the downstream request is used for redirection.
+    bool forced_use_original_host = 20;
+
+    bool forced_add_header_before_route_matcher = 22;
+  }
+
+  // An internal redirect is not handled, unless the number of previous internal redirects that a
+  // downstream request has encountered is lower than this value.
+  // In the case where a downstream request is bounced among multiple routes by internal redirect,
+  // the first route that hits this threshold, or does not set :ref:`internal_redirect_policy
+  // <envoy_api_field_config.route.v4alpha.RouteAction.internal_redirect_policy>`
+  // will pass the redirect back to downstream.
+  //
+  // If not specified, at most one redirect will be followed.
+  google.protobuf.UInt32Value max_internal_redirects = 1;
+
+  // Defines what upstream response codes are allowed to trigger internal redirect.
+  // All response codes support redirection except 200.
+  repeated uint32 redirect_response_codes = 2 [(validate.rules).repeated = {max_items: 50}];
+
+  // The URI of the redirect.
+  oneof redirect_url_rewrite_specifier {
+    // ption (validate.required) = true;
+
+    string redirect_url = 7 [(validate.rules).string = {min_len: 1}];
+
+    type.matcher.v3.RegexMatchAndSubstitute redirect_url_rewrite_regex = 8;
+  }
+
+  // Specifies a list of predicates that are queried when an upstream response is deemed
+  // to trigger an internal redirect by all other criteria. Any predicate in the list can reject
+  // the redirect, causing the response to be proxied to downstream.
+  repeated core.v3.TypedExtensionConfig predicates = 4;
+
+  // Allow internal redirect to follow a target URI with a different scheme than the value of
+  // x-forwarded-proto. The default is false.
+  bool allow_cross_scheme_redirect = 5;
+
+  // HTTP headers to add to a local reply. This allows the response mapper to append, to add
+  // or to override headers of any local reply before it is sent to a downstream client.
+  repeated core.v3.HeaderValueOption request_headers_to_add = 6
+      [(validate.rules).repeated = {max_items: 1000}];
+
+  // Indicates that during forwarding, the host header will be swapped with
+  // this value.
+  string host_rewrite_literal = 9
+      [(validate.rules).string = {well_known_regex: HTTP_HEADER_VALUE strict: false}];
+
+  // If true, the host name in the downstream request is used for redirection.
+  bool forced_use_original_host = 19;
+
+  bool forced_add_header_before_route_matcher = 21;
+
+  repeated RedirectPolicy policies = 18;
 }
 
 // A simple wrapper for an HTTP filter config. This is intended to be used as a wrapper for the

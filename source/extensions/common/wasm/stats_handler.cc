@@ -70,11 +70,31 @@ void LifecycleStatsHandler::onEvent(WasmEvent event) {
   switch (event) {
   case WasmEvent::VmShutDown:
     lifecycle_stats_.active_.set(--active_wasms);
+#ifdef ALIMESH
+    if (is_crashed_) {
+      is_crashed_ = false;
+      if (lifecycle_stats_.crash_.value() > 0) {
+        lifecycle_stats_.crash_.dec();
+      }
+    }
+#endif
     break;
   case WasmEvent::VmCreated:
     lifecycle_stats_.active_.set(++active_wasms);
     lifecycle_stats_.created_.inc();
     break;
+#ifdef ALIMESH
+  case WasmEvent::RuntimeError:
+    if (!is_crashed_) {
+      is_crashed_ = true;
+      lifecycle_stats_.crash_.inc();
+      lifecycle_stats_.crash_total_.inc();
+    }
+    break;
+  case WasmEvent::RecoverError:
+    lifecycle_stats_.recover_error_.inc();
+    break;
+#endif
   default:
     break;
   }

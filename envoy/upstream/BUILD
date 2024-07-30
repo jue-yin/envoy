@@ -39,6 +39,9 @@ envoy_cc_library(
         "@envoy_api//envoy/config/cluster/v3:pkg_cc_proto",
         "@envoy_api//envoy/config/core/v3:pkg_cc_proto",
     ],
+    alimesh_deps = [
+        "//envoy/redis:async_client_interface",
+    ],
 )
 
 envoy_cc_library(
@@ -141,6 +144,9 @@ envoy_cc_library(
         ":upstream_interface",
         "//envoy/http:async_client_interface",
         "//envoy/tcp:async_tcp_client_interface",
+    ],
+    alimesh_deps = [
+        "//envoy/redis:async_client_interface",
     ],
 )
 

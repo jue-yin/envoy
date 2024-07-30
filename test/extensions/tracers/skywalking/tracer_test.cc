@@ -218,6 +218,38 @@ TEST_F(TracerTest, TracerTestCreateNewSpanWithNoPropagationHeaders) {
     EXPECT_NE(0, third_child_span->spanEntity()->endTime());
   }
 
+#if defined(ALIMESH)
+  {
+    Envoy::Tracing::SpanPtr org_child_span_with_traceid_header =
+        org_span->spawnChild(mock_tracing_config_, "TestChild", mock_time_source_.systemTime());
+
+    Span* child_span_with_traceid_header = dynamic_cast<Span*>(org_child_span_with_traceid_header.get());
+
+    EXPECT_TRUE(child_span_with_traceid_header->spanEntity()->spanType() == skywalking::v3::SpanType::Exit);
+
+    EXPECT_TRUE(child_span_with_traceid_header->spanEntity()->skipAnalysis());
+    EXPECT_EQ(4, child_span_with_traceid_header->spanEntity()->spanId());
+    EXPECT_EQ(0, child_span_with_traceid_header->spanEntity()->parentSpanId());
+
+    // "TestChild" will be ignored and operation name of parent span will be used by default for
+    // child span (EXIT span).
+    EXPECT_EQ(span->spanEntity()->operationName(), child_span_with_traceid_header->spanEntity()->operationName());
+
+    Http::TestRequestHeaderMapImpl child_span_with_traceid_headers{{":authority", "test.com"},
+                                                       {":path", "/upstream/path"}};
+    Upstream::HostDescriptionConstSharedPtr host{
+        new testing::NiceMock<Upstream::MockHostDescription>()};
+
+    child_span_with_traceid_header->injectContext(child_span_with_traceid_headers, host);
+
+    auto sp = createSpanContext(child_span_with_traceid_headers.get_("sw8"));
+    EXPECT_EQ(sp->traceId(), child_span_with_traceid_headers.get_("sw8-traceid"));
+
+    child_span_with_traceid_header->finishSpan();
+    EXPECT_NE(0, child_span_with_traceid_header->spanEntity()->endTime());
+  }
+#endif
+
   // When the child span ends, the data is not reported immediately, but the end time is set.
   EXPECT_EQ(0U, mock_scope_.counter("tracing.skywalking.segments_sent").value());
   EXPECT_EQ(0U, mock_scope_.counter("tracing.skywalking.segments_dropped").value());

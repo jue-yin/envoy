@@ -71,6 +71,7 @@ const static bool should_log = true;
   FUNCTION(matcher)                                                                                \
   FUNCTION(misc)                                                                                   \
   FUNCTION(mongo)                                                                                  \
+  FUNCTION(overload)                                                                               \
   FUNCTION(multi_connection)                                                                       \
   FUNCTION(oauth2)                                                                                 \
   FUNCTION(quic)                                                                                   \

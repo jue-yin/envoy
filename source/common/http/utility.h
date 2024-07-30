@@ -223,6 +223,21 @@ public:
    */
   static std::string urlDecodeQueryParameter(absl::string_view encoded);
 
+  /**
+   * Encodes string view for storing it as a query parameter according to the
+   * x-www-form-urlencoded spec:
+   * https://www.w3.org/TR/html5/forms.html#application/x-www-form-urlencoded-encoding-algorithm
+   * @param value supplies string to be encoded.
+   * @return std::string encoded string according to
+   * https://www.w3.org/TR/html5/forms.html#application/x-www-form-urlencoded-encoding-algorithm
+   *
+   * Summary:
+   * The x-www-form-urlencoded spec mandates that all ASCII codepoints are %-encoded except the
+   * following: ALPHA | DIGIT | * | - | . | _
+   *
+   * NOTE: the space character is encoded as %20, NOT as the + character
+   */
+
 private:
   // Encodes string view to its percent encoded representation, with start index.
   static std::string encode(absl::string_view value, const size_t index,

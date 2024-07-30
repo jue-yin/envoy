@@ -907,9 +907,15 @@ TEST_P(ProtocolIntegrationTest, Retry) {
   const size_t http2_header_bytes_received =
       (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 24 : 27;
   expectUpstreamBytesSentAndReceived(
+#ifdef ALIMESH
+      BytesCountExpectation(2686 + quic_https_extra_bytes, 635, 550 + quic_https_extra_bytes, 54),
+      BytesCountExpectation(2262, 548, 242, http2_header_bytes_received),
+      BytesCountExpectation(2204, 520, 202, 6));
+#else
       BytesCountExpectation(2566 + quic_https_extra_bytes, 635, 430 + quic_https_extra_bytes, 54),
       BytesCountExpectation(2262, 548, 196, http2_header_bytes_received),
       BytesCountExpectation(2204, 520, 150, 6));
+#endif
 }
 
 // Regression test to guarantee that buffering for retries and shadows doesn't double the body size.
@@ -3717,9 +3723,15 @@ TEST_P(ProtocolIntegrationTest, HeaderOnlyBytesCountUpstream) {
   const size_t wire_bytes_received =
       (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 10 : 13;
   expectUpstreamBytesSentAndReceived(
+#ifdef ALIMESH
+      BytesCountExpectation(227, 38, 196, 18),
+      BytesCountExpectation(164, wire_bytes_received, 164, wire_bytes_received),
+      BytesCountExpectation(160, 5, 160, 3));
+#else
       BytesCountExpectation(167, 38, 136, 18),
       BytesCountExpectation(120, wire_bytes_received, 120, wire_bytes_received),
       BytesCountExpectation(116, 5, 116, 3));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, HeaderOnlyBytesCountDownstream) {
@@ -3729,9 +3741,15 @@ TEST_P(ProtocolIntegrationTest, HeaderOnlyBytesCountDownstream) {
   useAccessLog("%DOWNSTREAM_WIRE_BYTES_SENT% %DOWNSTREAM_WIRE_BYTES_RECEIVED% "
                "%DOWNSTREAM_HEADER_BYTES_SENT% %DOWNSTREAM_HEADER_BYTES_RECEIVED%");
   testRouterRequestAndResponseWithBody(0, 0, false);
+#ifdef ALIMESH
+  expectDownstreamBytesSentAndReceived(BytesCountExpectation(207, 51, 188, 19),
+                                       BytesCountExpectation(138, 34, 138, 34),
+                                       BytesCountExpectation(11, 10, 11, 6));
+#else
   expectDownstreamBytesSentAndReceived(BytesCountExpectation(124, 51, 105, 19),
                                        BytesCountExpectation(68, 34, 68, 34),
                                        BytesCountExpectation(8, 10, 8, 6));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountUpstream) {
@@ -3744,9 +3762,15 @@ TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountUpstream) {
   testRouterRequestAndResponseWithBody(100, 100, false);
   const size_t header_bytes_received =
       (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 10 : 13;
+#ifdef ALIMESH
+  expectUpstreamBytesSentAndReceived(BytesCountExpectation(366, 158, 224, 27),
+                                     BytesCountExpectation(274, 122, 165, header_bytes_received),
+                                     BytesCountExpectation(263, 109, 160, 3));
+#else
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(306, 158, 164, 27),
                                      BytesCountExpectation(229, 122, 120, header_bytes_received),
                                      BytesCountExpectation(219, 109, 116, 3));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountDownstream) {
@@ -3757,9 +3781,15 @@ TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountDownstream) {
   useAccessLog("%DOWNSTREAM_WIRE_BYTES_SENT% %DOWNSTREAM_WIRE_BYTES_RECEIVED% "
                "%DOWNSTREAM_HEADER_BYTES_SENT% %DOWNSTREAM_HEADER_BYTES_RECEIVED%");
   testRouterRequestAndResponseWithBody(100, 100, false);
+#ifdef ALIMESH
+  expectDownstreamBytesSentAndReceived(BytesCountExpectation(327, 190, 197, 46),
+                                       BytesCountExpectation(240, 173, 131, 34),
+                                       BytesCountExpectation(111, 113, 11, 6));
+#else
   expectDownstreamBytesSentAndReceived(BytesCountExpectation(244, 190, 114, 46),
                                        BytesCountExpectation(177, 173, 68, 34),
                                        BytesCountExpectation(111, 113, 8, 6));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountReuseDownstream) {
@@ -3780,17 +3810,29 @@ TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountReuseDownstream) {
   auto response_one = sendRequestAndWaitForResponse(default_request_headers_, request_size,
                                                     default_response_headers_, response_size, 0);
   checkSimpleRequestSuccess(request_size, response_size, response_one.get());
+#ifdef ALIMESH
+  expectDownstreamBytesSentAndReceived(BytesCountExpectation(327, 190, 197, 46),
+                                       BytesCountExpectation(236, 137, 127, 34),
+                                       BytesCountExpectation(111, 137, 11, 6), 0);
+#else
   expectDownstreamBytesSentAndReceived(BytesCountExpectation(244, 190, 114, 46),
                                        BytesCountExpectation(177, 137, 68, 34),
                                        BytesCountExpectation(111, 137, 8, 6), 0);
+#endif
 
   // Reuse connection, send the second request on the connection.
   auto response_two = sendRequestAndWaitForResponse(default_request_headers_, request_size,
                                                     default_response_headers_, response_size, 0);
   checkSimpleRequestSuccess(request_size, response_size, response_two.get());
+#ifdef ALIMESH
+  expectDownstreamBytesSentAndReceived(BytesCountExpectation(326, 190, 196, 46),
+                                       BytesCountExpectation(178, 137, 46, 27),
+                                       BytesCountExpectation(111, 137, 11, 6), 1);
+#else
   expectDownstreamBytesSentAndReceived(BytesCountExpectation(244, 190, 114, 46),
                                        BytesCountExpectation(148, 137, 15, 27),
                                        BytesCountExpectation(111, 137, 8, 6), 1);
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountReuseUpstream) {
@@ -3814,20 +3856,34 @@ TEST_P(ProtocolIntegrationTest, HeaderAndBodyWireBytesCountReuseUpstream) {
   const size_t http2_header_bytes_received =
       (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 10 : 13;
   expectUpstreamBytesSentAndReceived(
+#ifdef ALIMESH
+      BytesCountExpectation(366, 158, 224, 27),
+      BytesCountExpectation(273, 122, 164, http2_header_bytes_received),
+      BytesCountExpectation(263, 108, 160, 3), 0);
+#else
       BytesCountExpectation(306, 158, 164, 27),
       BytesCountExpectation(223, 122, 120, http2_header_bytes_received),
       BytesCountExpectation(223, 108, 114, 3), 0);
+#endif
 
   // Swap clients so the other connection is used to send the request.
   std::swap(codec_client_, second_client);
   auto response_two = sendRequestAndWaitForResponse(default_request_headers_, request_size,
                                                     default_response_headers_, response_size, 0);
 
+#ifdef ALIMESH
+  const size_t http2_header_bytes_sent =
+      (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 69 : 72;
+  expectUpstreamBytesSentAndReceived(BytesCountExpectation(366, 158, 224, 27),
+                                     BytesCountExpectation(181, 119, http2_header_bytes_sent, 10),
+                                     BytesCountExpectation(114, 108, 13, 3), 1);
+#else
   const size_t http2_header_bytes_sent =
       (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 54 : 58;
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(306, 158, 164, 27),
                                      BytesCountExpectation(167, 119, http2_header_bytes_sent, 10),
                                      BytesCountExpectation(114, 108, 11, 3), 1);
+#endif
   second_client->close();
 }
 
@@ -3888,9 +3944,15 @@ TEST_P(ProtocolIntegrationTest, TrailersWireBytesCountUpstream) {
   const size_t http2_trailer_bytes_received =
       (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 49 : 52;
   expectUpstreamBytesSentAndReceived(
+#ifdef ALIMESH
+      BytesCountExpectation(316, 120, 264, 67),
+      BytesCountExpectation(221, 81, 202, http2_trailer_bytes_received),
+      BytesCountExpectation(178, 33, 166, 7));
+#else
       BytesCountExpectation(256, 120, 204, 67),
       BytesCountExpectation(181, 81, 162, http2_trailer_bytes_received),
       BytesCountExpectation(134, 33, 122, 7));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, TrailersWireBytesCountDownstream) {
@@ -3904,10 +3966,15 @@ TEST_P(ProtocolIntegrationTest, TrailersWireBytesCountDownstream) {
   config_helper_.addConfigModifier(setEnableUpstreamTrailersHttp1());
 
   testTrailers(10, 20, true, true);
-
+#ifdef ALIMESH
+  expectDownstreamBytesSentAndReceived(BytesCountExpectation(289, 140, 239, 84),
+                                       BytesCountExpectation(195, 86, 166, 67),
+                                       BytesCountExpectation(36, 26, 17, 10));
+#else
   expectDownstreamBytesSentAndReceived(BytesCountExpectation(206, 140, 156, 84),
                                        BytesCountExpectation(136, 86, 107, 67),
                                        BytesCountExpectation(36, 26, 14, 10));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, DownstreamDisconnectBeforeRequestCompleteWireBytesCountUpstream) {
@@ -3920,9 +3987,15 @@ TEST_P(ProtocolIntegrationTest, DownstreamDisconnectBeforeRequestCompleteWireByt
 
   testRouterDownstreamDisconnectBeforeRequestComplete(nullptr);
 
+#ifdef ALIMESH
+  expectUpstreamBytesSentAndReceived(BytesCountExpectation(255, 0, 224, 0),
+                                     BytesCountExpectation(164, 0, 164, 0),
+                                     BytesCountExpectation(160, 0, 160, 0));
+#else
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(195, 0, 164, 0),
                                      BytesCountExpectation(120, 0, 120, 0),
                                      BytesCountExpectation(120, 0, 120, 0));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, DownstreamDisconnectBeforeRequestCompleteWireBytesCountDownstream) {
@@ -3950,9 +4023,15 @@ TEST_P(ProtocolIntegrationTest, UpstreamDisconnectBeforeRequestCompleteWireBytes
 
   testRouterUpstreamDisconnectBeforeRequestComplete();
 
+#ifdef ALIMESH
+  expectUpstreamBytesSentAndReceived(BytesCountExpectation(255, 0, 224, 0),
+                                     BytesCountExpectation(164, 0, 164, 0),
+                                     BytesCountExpectation(160, 0, 160, 0));
+#else
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(195, 0, 164, 0),
                                      BytesCountExpectation(120, 0, 120, 0),
                                      BytesCountExpectation(120, 0, 120, 0));
+#endif
 }
 
 TEST_P(ProtocolIntegrationTest, UpstreamDisconnectBeforeResponseCompleteWireBytesCountUpstream) {
@@ -3968,9 +4047,15 @@ TEST_P(ProtocolIntegrationTest, UpstreamDisconnectBeforeResponseCompleteWireByte
   const size_t http2_header_bytes_received =
       (GetParam().http2_implementation == Http2Impl::Oghttp2) ? 10 : 13;
   expectUpstreamBytesSentAndReceived(
+#ifdef ALIMESH
+      BytesCountExpectation(227, 47, 196, 27),
+      BytesCountExpectation(163, http2_header_bytes_received, 163, http2_header_bytes_received),
+      BytesCountExpectation(160, 5, 160, 3));
+#else
       BytesCountExpectation(167, 47, 136, 27),
       BytesCountExpectation(120, http2_header_bytes_received, 120, http2_header_bytes_received),
       BytesCountExpectation(113, 5, 113, 3));
+#endif
 }
 
 TEST_P(DownstreamProtocolIntegrationTest, BadRequest) {

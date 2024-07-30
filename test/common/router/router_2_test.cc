@@ -57,6 +57,9 @@ TEST_F(RouterTestSuppressEnvoyHeaders, MaintenanceMode) {
   router_->decodeHeaders(headers, true);
 }
 
+// if ALIMESH defined,  x-envoy-upstream-service-time will be added anyway.
+// see https://code.alibaba-inc.com/Ingress/envoy/codereview/13276137
+#ifndef ALIMESH
 // Validate that x-envoy-upstream-service-time is not added when Envoy header
 // suppression is enabled.
 // TODO(htuch): Probably should be TEST_P with
@@ -87,6 +90,7 @@ TEST_F(RouterTestSuppressEnvoyHeaders, EnvoyUpstreamServiceTime) {
   response_decoder->decodeHeaders(std::move(response_headers), true);
   EXPECT_TRUE(verifyHostUpstreamStats(1, 0));
 }
+#endif
 
 // Validate that we don't set x-envoy-attempt-count in responses before an upstream attempt is made.
 TEST_F(RouterTestSuppressEnvoyHeaders, EnvoyAttemptCountInResponseNotPresent) {
@@ -431,6 +435,9 @@ TEST_F(RouterTestChildSpan, BasicFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
+#if defined(ALIMESH)
+  EXPECT_CALL(*child_span, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
+#endif
   router_->decodeHeaders(headers, true);
   EXPECT_EQ(1U,
             callbacks_.route_->route_entry_.virtual_cluster_.stats().upstream_rq_total_.value());
@@ -482,6 +489,9 @@ TEST_F(RouterTestChildSpan, ResetFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
+#if defined(ALIMESH)
+  EXPECT_CALL(*child_span, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
+#endif
   router_->decodeHeaders(headers, true);
   EXPECT_EQ(1U,
             callbacks_.route_->route_entry_.virtual_cluster_.stats().upstream_rq_total_.value());
@@ -536,6 +546,9 @@ TEST_F(RouterTestChildSpan, CancelFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
+#if defined(ALIMESH)
+  EXPECT_CALL(*child_span, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
+#endif
   router_->decodeHeaders(headers, true);
   EXPECT_EQ(1U,
             callbacks_.route_->route_entry_.virtual_cluster_.stats().upstream_rq_total_.value());
@@ -587,6 +600,9 @@ TEST_F(RouterTestChildSpan, ResetRetryFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span_1));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
+#if defined(ALIMESH)
+  EXPECT_CALL(*child_span_1, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
+#endif
   router_->decodeHeaders(headers, true);
   EXPECT_EQ(1U,
             callbacks_.route_->route_entry_.virtual_cluster_.stats().upstream_rq_total_.value());
@@ -629,6 +645,9 @@ TEST_F(RouterTestChildSpan, ResetRetryFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span_2));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
+#if defined(ALIMESH)
+  EXPECT_CALL(*child_span_2, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
+#endif
   EXPECT_CALL(*child_span_2, setTag(Eq(Tracing::Tags::get().RetryCount), Eq("1")));
 
   router_->retry_state_->callback_();

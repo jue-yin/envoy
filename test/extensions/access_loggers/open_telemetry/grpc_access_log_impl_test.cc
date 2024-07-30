@@ -3,6 +3,7 @@
 
 #include "envoy/config/core/v3/grpc_service.pb.h"
 #include "envoy/extensions/access_loggers/grpc/v3/als.pb.h"
+#include "envoy/extensions/access_loggers/open_telemetry/v3/logs_service.pb.h"
 
 #include "source/common/buffer/zero_copy_input_stream_impl.h"
 #include "source/common/protobuf/protobuf.h"

@@ -71,6 +71,26 @@ Http::RegisterCustomInlineHeader<Http::CustomInlineHeaderRegistry::Type::Request
 Http::RegisterCustomInlineHeader<Http::CustomInlineHeaderRegistry::Type::RequestHeaders>
     custom_header_1_copy(Http::LowerCaseString{"foo_custom_header"});
 
+class HeaderMapImplTest : public testing::TestWithParam<uint32_t> {
+public:
+  HeaderMapImplTest() {
+    // Set the lazy map threshold using the test parameter.
+    scoped_runtime_.mergeValues(
+        {{"envoy.reloadable_features.deprecate_global_ints", "false"},
+         {"envoy.http.headermap.lazy_map_min_size", absl::StrCat(GetParam())}});
+  }
+
+  static std::string testParamsToString(const ::testing::TestParamInfo<uint32_t>& params) {
+    return absl::StrCat(params.param);
+  }
+
+  TestScopedRuntime scoped_runtime_;
+};
+
+INSTANTIATE_TEST_SUITE_P(HeaderMapThreshold, HeaderMapImplTest,
+                         testing::Values(0, 1, std::numeric_limits<uint32_t>::max()),
+                         HeaderMapImplTest::testParamsToString);
+
 // Make sure that the same header registered twice points to the same location.
 TEST(HeaderMapImplTest, CustomRegisteredHeaders) {
   TestRequestHeaderMapImpl headers;

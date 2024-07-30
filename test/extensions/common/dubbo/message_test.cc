@@ -27,7 +27,7 @@ TEST(RpcRequestImplTest, RpcRequestAttachmentTest) {
 
   RpcRequestImpl::Attachment attachment(std::move(map), 23333);
 
-  EXPECT_EQ(4, attachment.attachment().toUntypedMap().value().get().size());
+  EXPECT_EQ(4, attachment.attachment().toUntypedMap().value()->size());
 
   // Test lookup.
   EXPECT_EQ(absl::nullopt, attachment.lookup("map_key"));
@@ -40,15 +40,15 @@ TEST(RpcRequestImplTest, RpcRequestAttachmentTest) {
   attachment.remove("fake_key");
   EXPECT_EQ(absl::nullopt, attachment.lookup("fake_key"));
 
-  EXPECT_EQ(3, attachment.attachment().toUntypedMap().value().get().size());
+  EXPECT_EQ(3, attachment.attachment().toUntypedMap().value()->size());
 
   // Test remove. Delete a key/value pair whose value type is map.
   attachment.remove("map_key");
-  EXPECT_EQ(2, attachment.attachment().toUntypedMap().value().get().size());
+  EXPECT_EQ(2, attachment.attachment().toUntypedMap().value()->size());
 
   // Test insert.
   attachment.insert("test", "test_value");
-  EXPECT_EQ(3, attachment.attachment().toUntypedMap().value().get().size());
+  EXPECT_EQ(3, attachment.attachment().toUntypedMap().value()->size());
 
   EXPECT_EQ("test_value", *attachment.lookup("test"));
 

@@ -40,6 +40,10 @@ public:
     return virtual_cluster_name_;
   }
 
+  void setVirtualClusterName(const absl::optional<std::string>& name) override {
+    virtual_cluster_name_ = name;
+  }
+
   void onRequestComplete() override { end_time_ = timeSystem().monotonicTime(); }
 
   absl::optional<std::chrono::nanoseconds> currentDuration() const override {

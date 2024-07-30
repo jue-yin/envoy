@@ -110,6 +110,10 @@ private:
 
 using ClientConfigSharedPtr = std::shared_ptr<ClientConfig>;
 
+#if defined(ALIMESH)
+bool isAuthorizationPass(const Http::ResponseHeaderMap& headers);
+#endif
+
 /**
  * This client implementation is used when the Ext_Authz filter needs to communicate with an
  * HTTP authorization server. Unlike the gRPC client that allows the server to define the

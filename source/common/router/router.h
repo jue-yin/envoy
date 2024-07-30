@@ -42,7 +42,11 @@
 #include "source/common/stats/symbol_table.h"
 #include "source/common/stream_info/stream_info_impl.h"
 #include "source/common/upstream/load_balancer_impl.h"
-#include "source/common/upstream/upstream_http_factory_context_impl.h"
+#include "source/common/upstream/upstream_factory_context_impl.h"
+
+#if defined(ALIMESH)
+#include "envoy/stats/timespan.h"
+#endif
 
 namespace Envoy {
 namespace Router {
@@ -262,9 +266,9 @@ public:
           Http::FilterChainUtility::createSingletonUpstreamFilterConfigProviderManager(
               server_factory_ctx);
       std::string prefix = context.scope().symbolTable().toString(context.scope().prefix());
-      upstream_ctx_ = std::make_unique<Upstream::UpstreamHttpFactoryContextImpl>(
+      upstream_ctx_ = std::make_unique<Upstream::UpstreamFactoryContextImpl>(
           server_factory_ctx, context.initManager(), context.scope());
-      Http::FilterChainHelper<Server::Configuration::UpstreamHttpFactoryContext,
+      Http::FilterChainHelper<Server::Configuration::UpstreamFactoryContext,
                               Server::Configuration::UpstreamHttpFilterConfigFactory>
           helper(*filter_config_provider_manager, server_factory_ctx, *upstream_ctx_, prefix);
       helper.processFilters(upstream_http_filters, "router upstream http", "router upstream http",
@@ -319,7 +323,7 @@ public:
   Http::Context& http_context_;
   Stats::StatName zone_name_;
   Stats::StatName empty_stat_name_;
-  std::unique_ptr<Server::Configuration::UpstreamHttpFactoryContext> upstream_ctx_;
+  std::unique_ptr<Server::Configuration::UpstreamFactoryContext> upstream_ctx_;
   Http::FilterChainUtility::FilterFactoriesList upstream_http_filter_factories_;
 
 private:
@@ -578,6 +582,11 @@ private:
   void onPerTryTimeoutCommon(UpstreamRequest& upstream_request, Stats::Counter& error_counter,
                              const std::string& response_code_details);
   Stats::StatName upstreamZone(Upstream::HostDescriptionConstSharedPtr upstream_host);
+#if defined(ALIMESH)
+  void chargeUpstreamGrpcCode(uint64_t http_status_code, uint64_t grpc_response_code,
+                              const Http::ResponseHeaderMap& response_headers,
+                              Upstream::HostDescriptionConstSharedPtr upstream_host, bool dropped);
+#endif
   void chargeUpstreamCode(uint64_t response_status_code,
                           const Http::ResponseHeaderMap& response_headers,
                           Upstream::HostDescriptionConstSharedPtr upstream_host, bool dropped);
@@ -636,6 +645,12 @@ private:
                                    UpstreamRequest& upstream_request, bool end_stream,
                                    uint64_t grpc_to_http_status);
   Http::Context& httpContext() { return config_.http_context_; }
+
+#if defined(ALIMESH)
+  bool setupActiveRedirect(const Http::ResponseHeaderMap& headers,
+                           UpstreamRequest& upstream_request);
+  bool convertRequestHeadersForInternalActiveRedirect(Http::RequestHeaderMap& downstream_headers);
+#endif
 
   RetryStatePtr retry_state_;
   FilterConfig& config_;

@@ -51,6 +51,10 @@
 #include "source/common/quic/client_connection_factory_impl.h"
 #endif
 
+#if defined(ALIMESH)
+#include "source/common/redis/async_client_impl.h"
+#endif
+
 namespace Envoy {
 namespace Upstream {
 namespace {
@@ -1202,6 +1206,25 @@ ClusterManagerImpl::ThreadLocalClusterManagerImpl::ClusterEntry::httpAsyncClient
   }
   return *lazy_http_async_client_;
 }
+
+#if defined(ALIMESH)
+Redis::AsyncClient&
+ClusterManagerImpl::ThreadLocalClusterManagerImpl::ClusterEntry::redisAsyncClient() {
+  using Extensions::NetworkFilters::Common::Redis::RedisCommandStats;
+  using Extensions::NetworkFilters::Common::Redis::Client::RawClientFactoryImpl;
+
+  if (lazy_redis_async_client_ == nullptr) {
+    auto redis_command_stats =
+        RedisCommandStats::createRedisCommandStats(parent_.parent_.stats_.symbolTable());
+    lazy_redis_async_client_ = std::make_unique<Redis::AsyncClientImpl>(
+        this, parent_.thread_local_dispatcher_, RawClientFactoryImpl::instance_,
+        parent_.parent_.stats_.createScope(
+            fmt::format("cluster.{}.redis_cluster", cluster_info_->name())),
+        redis_command_stats, nullptr);
+  }
+  return *lazy_redis_async_client_;
+}
+#endif
 
 Tcp::AsyncTcpClientPtr
 ClusterManagerImpl::ThreadLocalClusterManagerImpl::ClusterEntry::tcpAsyncClient(

@@ -79,6 +79,10 @@ public:
   MOCK_METHOD(ServerLifecycleNotifier&, lifecycleNotifier, ());
   MOCK_METHOD(StatsConfig&, statsConfig, (), ());
   MOCK_METHOD(AccessLog::AccessLogManager&, accessLogManager, (), ());
+  Configuration::DownstreamHTTPFilterConfigProviderManagerSharedPtr
+  downstreamHttpFilterConfigProviderManager() override {
+    return filter_config_provider_manager_;
+  }
 
   testing::NiceMock<Upstream::MockClusterManager> cluster_manager_;
   testing::NiceMock<Event::MockDispatcher> dispatcher_;
@@ -101,13 +105,15 @@ public:
   Router::ContextImpl router_context_;
   envoy::config::bootstrap::v3::Bootstrap bootstrap_;
   testing::NiceMock<MockOptions> options_;
+  Configuration::DownstreamHTTPFilterConfigProviderManagerSharedPtr filter_config_provider_manager_{
+      std::make_shared<Filter::HttpFilterConfigProviderManagerImpl>()};
 };
 
 // Stateless mock ServerFactoryContext for cases where it needs to be used concurrently in different
 // threads. Global state in the MockServerFactoryContext causes thread safety issues in this case.
 class StatelessMockServerFactoryContext : public virtual ServerFactoryContext {
 public:
-  StatelessMockServerFactoryContext() = default;
+  StatelessMockServerFactoryContext();
   ~StatelessMockServerFactoryContext() override = default;
 
   MOCK_METHOD(Upstream::ClusterManager&, clusterManager, ());
@@ -134,6 +140,11 @@ public:
   MOCK_METHOD(ServerLifecycleNotifier&, lifecycleNotifier, ());
   MOCK_METHOD(StatsConfig&, statsConfig, (), ());
   MOCK_METHOD(AccessLog::AccessLogManager&, accessLogManager, (), ());
+  Configuration::DownstreamHTTPFilterConfigProviderManagerSharedPtr
+  downstreamHttpFilterConfigProviderManager() override {
+    return filter_config_provider_manager_;
+  }
+  Configuration::DownstreamHTTPFilterConfigProviderManagerSharedPtr filter_config_provider_manager_;
 };
 
 } // namespace Configuration

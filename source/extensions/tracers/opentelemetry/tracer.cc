@@ -21,6 +21,7 @@ constexpr absl::string_view kTraceState = "tracestate";
 constexpr absl::string_view kDefaultVersion = "00";
 constexpr absl::string_view kServiceNameKey = "service.name";
 constexpr absl::string_view kDefaultServiceName = "unknown_service:envoy";
+constexpr absl::string_view kTraceId = "ot-traceid";
 
 using opentelemetry::proto::collector::trace::v1::ExportTraceServiceRequest;
 
@@ -61,6 +62,8 @@ void Span::injectContext(Tracing::TraceContext& trace_context,
   std::string trace_flags_hex = Hex::encode(trace_flags_vec);
   std::string traceparent_header_value =
       absl::StrCat(kDefaultVersion, "-", trace_id_hex, "-", span_id_hex, "-", trace_flags_hex);
+  // Set the traceid.
+  trace_context.setByReferenceKey(kTraceId, trace_id_hex);
   // Set the traceparent in the trace_context.
   trace_context.setByReferenceKey(kTraceParent, traceparent_header_value);
   // Also set the tracestate.

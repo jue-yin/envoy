@@ -6,6 +6,7 @@
 
 #include "source/extensions/filters/network/common/redis/client_impl.h"
 #include "source/extensions/filters/network/common/redis/codec_impl.h"
+#include "source/extensions/filters/network/common/redis/raw_client.h"
 
 #include "test/test_common/printers.h"
 
@@ -34,7 +35,18 @@ public:
 private:
   Common::Redis::EncoderImpl real_encoder_;
 };
+#if defined(ALIMESH)
+class MockRawEncoder : public Common::Redis::RawEncoder {
+public:
+  MockRawEncoder();
+  ~MockRawEncoder() override;
 
+  MOCK_METHOD(void, encode, (std::string_view value, Buffer::Instance& out));
+
+private:
+  Common::Redis::RawEncoderImpl real_encoder_;
+};
+#endif
 class MockDecoder : public Common::Redis::Decoder {
 public:
   MockDecoder();
@@ -110,7 +122,18 @@ public:
               (Common::Redis::RespValuePtr & value, const std::string& host_address,
                bool ask_redirection));
 };
+#if defined(ALIMESH)
+class MockRawClientCallbacks : public RawClientCallbacks {
+public:
+  MockRawClientCallbacks();
+  ~MockRawClientCallbacks() override;
 
+  void onResponse(std::string&& value) override { onResponse_(value); }
+
+  MOCK_METHOD(void, onResponse_, (std::string & value));
+  MOCK_METHOD(void, onFailure, ());
+};
+#endif
 } // namespace Client
 
 } // namespace Redis

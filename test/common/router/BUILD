@@ -145,6 +145,9 @@ envoy_cc_test(
         "@envoy_api//envoy/config/route/v3:pkg_cc_proto",
         "@envoy_api//envoy/extensions/filters/network/http_connection_manager/v3:pkg_cc_proto",
     ],
+    alimesh_deps = [
+        "//test/mocks/stream_info:stream_info_mocks",
+    ],
 )
 
 envoy_cc_test(
@@ -177,6 +180,9 @@ envoy_cc_test(
         "@envoy_api//envoy/config/route/v3:pkg_cc_proto",
         "@envoy_api//envoy/extensions/filters/network/http_connection_manager/v3:pkg_cc_proto",
         "@envoy_api//envoy/service/discovery/v3:pkg_cc_proto",
+    ],
+    alimesh_deps = [
+        "//test/mocks/stream_info:stream_info_mocks",
     ],
 )
 

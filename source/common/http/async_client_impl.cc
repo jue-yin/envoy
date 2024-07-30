@@ -33,6 +33,11 @@ const AsyncStreamImpl::RouteEntryImpl::ConnectConfigOptRef
     AsyncStreamImpl::RouteEntryImpl::connect_config_nullopt_;
 const std::list<LowerCaseString> AsyncStreamImpl::NullCommonConfig::internal_only_headers_;
 
+#if defined(ALIMESH)
+const Router::InternalActiveRedirectPoliciesImpl
+    AsyncStreamImpl::RouteEntryImpl::internal_active_redirect_policy_;
+#endif
+
 AsyncClientImpl::AsyncClientImpl(Upstream::ClusterInfoConstSharedPtr cluster,
                                  Stats::Store& stats_store, Event::Dispatcher& dispatcher,
                                  const LocalInfo::LocalInfo& local_info,

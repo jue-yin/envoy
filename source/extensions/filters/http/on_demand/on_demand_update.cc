@@ -193,7 +193,11 @@ void OnDemandRouteUpdate::onDestroy() {
 // This is the callback which is called when an update requested in requestRouteConfigUpdate()
 // has been propagated to workers, at which point the request processing is restarted from the
 // beginning.
+#if defined(ALIMESH)
+void OnDemandRouteUpdate::onRouteConfigUpdateCompletion(bool) {
+#else
 void OnDemandRouteUpdate::onRouteConfigUpdateCompletion(bool route_exists) {
+#endif
   filter_iteration_state_ = Http::FilterHeadersStatus::Continue;
 
   // Don't call continueDecoding in the middle of decodeHeaders()
@@ -201,12 +205,14 @@ void OnDemandRouteUpdate::onRouteConfigUpdateCompletion(bool route_exists) {
     return;
   }
 
+#if !defined(ALIMESH)
   if (route_exists &&                  // route can be resolved after an on-demand
                                        // VHDS update
       !callbacks_->decodingBuffer() && // Redirects with body not yet supported.
       callbacks_->recreateStream(/*headers=*/nullptr)) {
     return;
   }
+#endif
 
   // route cannot be resolved after an on-demand VHDS update or
   // recreating stream failed, continue the filter-chain

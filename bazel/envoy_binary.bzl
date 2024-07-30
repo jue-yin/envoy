@@ -9,6 +9,7 @@ load(
     "envoy_select_exported_symbols",
     "envoy_stdlib_deps",
     "tcmalloc_external_dep",
+    "envoy_select_alimesh",
 )
 
 # Envoy C++ binary targets should be specified with this function.
@@ -86,7 +87,7 @@ def _envoy_linkopts():
         "@envoy//bazel:boringssl_fips": [],
         "@envoy//bazel:windows_x86_64": [],
         "//conditions:default": ["-pie"],
-    }) + envoy_select_exported_symbols(["-Wl,-E"])
+    }) + envoy_select_exported_symbols(["-Wl,-E"]) + envoy_select_alimesh(["-lcrypt"])
 
 def _envoy_stamped_deps():
     return select({

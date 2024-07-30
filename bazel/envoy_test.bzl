@@ -16,6 +16,7 @@ load(
     "envoy_select_force_libcpp",
     "envoy_stdlib_deps",
     "tcmalloc_external_dep",
+    "envoy_select_alimesh",
 )
 
 # Envoy C++ related test infrastructure (that want gtest, gmock, but may be
@@ -72,7 +73,7 @@ def _envoy_test_linkopts():
         # TODO(mattklein123): It's not great that we universally link against the following libs.
         # In particular, -latomic and -lrt are not needed on all platforms. Make this more granular.
         "//conditions:default": ["-pthread", "-lrt", "-ldl"],
-    }) + envoy_select_force_libcpp([], ["-lstdc++fs", "-latomic"]) + envoy_dbg_linkopts() + envoy_select_exported_symbols(["-Wl,-E"])
+    }) + envoy_select_force_libcpp([], ["-lstdc++fs", "-latomic"]) + envoy_select_alimesh(["-lcrypt"]) + envoy_dbg_linkopts() + envoy_select_exported_symbols(["-Wl,-E"])
 
 # Envoy C++ fuzz test targets. These are not included in coverage runs.
 def envoy_cc_fuzz_test(
@@ -151,6 +152,7 @@ def envoy_cc_test(
         repository = "",
         external_deps = [],
         deps = [],
+        alimesh_deps = [],
         tags = [],
         args = [],
         copts = [],
@@ -163,6 +165,11 @@ def envoy_cc_test(
         env = {},
         exec_properties = {}):
     coverage_tags = tags + ([] if coverage else ["nocoverage"])
+
+    deps = deps + select({
+        "@envoy//bazel:alimesh": [],
+        "//conditions:default": alimesh_deps,
+    })
 
     native.cc_test(
         name = name,
@@ -198,13 +205,21 @@ def envoy_cc_test_library(
         data = [],
         external_deps = [],
         deps = [],
+        alimesh_deps = [],
         repository = "",
         tags = [],
         include_prefix = None,
         copts = [],
         alwayslink = 1,
         **kargs):
+
+    deps = deps + select({
+        "@envoy//bazel:alimesh": [],
+        "//conditions:default": alimesh_deps,
+    })
+
     disable_pch = kargs.pop("disable_pch", True)
+
     _envoy_cc_test_infrastructure_library(
         name,
         srcs,

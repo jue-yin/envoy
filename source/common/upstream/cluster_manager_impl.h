@@ -525,6 +525,9 @@ private:
                                               LoadBalancerContext* context) override;
       Host::CreateConnectionData tcpConn(LoadBalancerContext* context) override;
       Http::AsyncClient& httpAsyncClient() override;
+#if defined(ALIMESH)
+      Redis::AsyncClient& redisAsyncClient() override;
+#endif
       Tcp::AsyncTcpClientPtr
       tcpAsyncClient(LoadBalancerContext* context,
                      Tcp::AsyncTcpClientOptionsConstSharedPtr options) override;
@@ -573,6 +576,9 @@ private:
       // Current active LB.
       LoadBalancerPtr lb_;
       Http::AsyncClientPtr lazy_http_async_client_;
+#if defined(ALIMESH)
+      Redis::AsyncClientPtr lazy_redis_async_client_;
+#endif
       // Stores QUICHE specific objects which live through out the life time of the cluster and can
       // be shared across its hosts.
       Http::PersistentQuicInfoPtr quic_info_;

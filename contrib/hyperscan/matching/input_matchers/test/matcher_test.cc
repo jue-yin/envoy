@@ -49,6 +49,10 @@ TEST(ThreadLocalTest, RaceScratchCreation) {
   for (auto& thread : threads) {
     thread->join();
   }
+
+  if (database) {
+    hs_free_database(database);
+  }
 }
 
 // Verify that even if thread local is not initialized, matcher can work and create thread local

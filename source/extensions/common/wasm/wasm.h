@@ -90,6 +90,10 @@ public:
   }
   void setFailStateForTesting(proxy_wasm::FailState fail_state) { failed_ = fail_state; }
 
+#if defined(ALIMESH)
+  LifecycleStats& lifecycleStats() { return lifecycle_stats_handler_.stats(); }
+#endif
+
 protected:
   friend class Context;
 
@@ -153,13 +157,24 @@ private:
 
 using PluginHandleSharedPtr = std::shared_ptr<PluginHandle>;
 
+#if defined(ALIMESH)
+class PluginHandleSharedPtrThreadLocal : public ThreadLocal::ThreadLocalObject,
+                                         public Logger::Loggable<Logger::Id::wasm> {
+public:
+  PluginHandleSharedPtrThreadLocal(PluginHandleSharedPtr handle) : handle_(handle){};
+  bool recover();
+#else
 class PluginHandleSharedPtrThreadLocal : public ThreadLocal::ThreadLocalObject {
 public:
   PluginHandleSharedPtrThreadLocal(PluginHandleSharedPtr handle) : handle_(handle){};
+#endif
   PluginHandleSharedPtr& handle() { return handle_; }
 
 private:
   PluginHandleSharedPtr handle_;
+#if defined(ALIMESH)
+  MonotonicTime last_recover_time_;
+#endif
 };
 
 using CreateWasmCallback = std::function<void(WasmHandleSharedPtr)>;

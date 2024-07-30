@@ -45,7 +45,7 @@ namespace NetworkFilters {
 namespace HttpConnectionManager {
 
 using FilterConfigProviderManager =
-    Filter::FilterConfigProviderManager<Filter::NamedHttpFilterFactoryCb,
+    Filter::FilterConfigProviderManager<Http::NamedHttpFilterFactoryCb,
                                         Server::Configuration::FactoryContext>;
 
 /**
@@ -140,7 +140,7 @@ public:
       Http::FilterChainManager& manager, bool = false,
       const Http::FilterChainOptions& = Http::EmptyFilterChainOptions{}) const override;
   using FilterFactoriesList =
-      std::list<Filter::FilterConfigProviderPtr<Filter::NamedHttpFilterFactoryCb>>;
+      std::list<Filter::FilterConfigProviderPtr<Http::NamedHttpFilterFactoryCb>>;
   struct FilterConfig {
     std::unique_ptr<FilterFactoriesList> filter_factories;
     bool allow_upgrade;
@@ -267,6 +267,9 @@ public:
   bool addProxyProtocolConnectionState() const override {
     return add_proxy_protocol_connection_state_;
   }
+#if defined(ALIMESH)
+  std::chrono::seconds keepaliveHeaderTimeout() const override { return keepalive_header_timeout_; }
+#endif
 
 private:
   enum class CodecType { HTTP1, HTTP2, HTTP3, AUTO };
@@ -353,6 +356,10 @@ private:
   static const uint64_t RequestTimeoutMs = 0;
   // request header timeout is disabled by default
   static const uint64_t RequestHeaderTimeoutMs = 0;
+#if defined(ALIMESH)
+  // keep-alive response header is disabled by default
+  static const uint64_t KeepaliveHeaderTimeoutSeconds = 0;
+#endif
   const envoy::extensions::filters::network::http_connection_manager::v3::HttpConnectionManager::
       PathWithEscapedSlashesAction path_with_escaped_slashes_action_;
   const bool strip_trailing_host_dot_;
@@ -361,6 +368,9 @@ private:
   const Http::HeaderValidatorFactoryPtr header_validator_factory_;
   const bool append_x_forwarded_port_;
   const bool add_proxy_protocol_connection_state_;
+#if defined(ALIMESH)
+  const std::chrono::seconds keepalive_header_timeout_;
+#endif
 };
 
 /**

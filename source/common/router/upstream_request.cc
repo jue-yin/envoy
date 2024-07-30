@@ -111,6 +111,17 @@ UpstreamRequest::UpstreamRequest(RouterFilterInterface& parent,
   auto upstream_host = conn_pool_->host();
   if (span_ != nullptr) {
     span_->injectContext(*parent_.downstreamHeaders(), upstream_host);
+#if defined(ALIMESH)
+    if (upstream_host != nullptr && upstream_host->address() != nullptr &&
+        upstream_host->address()->ip() != nullptr) {
+      const std::string& address = upstream_host->address()->ip()->addressAsString();
+      if (upstream_host->address()->ip()->version() == Network::Address::IpVersion::v6) {
+        span_->setTag(Tracing::Tags::get().PeerIpv6, address);
+      } else {
+        span_->setTag(Tracing::Tags::get().PeerIpv4, address);
+      }
+    }
+#endif
   } else {
     // No independent child span for current upstream request then inject the parent span's tracing
     // context into the request headers.

@@ -37,7 +37,7 @@ MessageMetadataSharedPtr createDubboRequst(bool one_way_request) {
     Hessian2::ObjectPtr key_o = std::make_unique<Hessian2::StringObject>("group");
     Hessian2::ObjectPtr val_o = std::make_unique<Hessian2::StringObject>("fake_group");
 
-    map->toMutableUntypedMap().value().get().emplace(std::move(key_o), std::move(val_o));
+    map->toMutableUntypedMap()->emplace(std::move(key_o), std::move(val_o));
     return std::make_unique<RpcRequestImpl::Attachment>(std::move(map), 0);
   });
 

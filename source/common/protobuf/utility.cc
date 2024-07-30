@@ -508,7 +508,17 @@ void redact(Protobuf::Message* message, bool ancestor_is_sensitive) {
           redact(reflection->MutableRepeatedMessage(message, field_descriptor, i), sensitive);
         }
       } else if (reflection->HasField(*message, field_descriptor)) {
+#if defined(ALIMESH)
+        // The content of the poll_delay field cannot be displayed because the typed_config field of
+        // PrivateKeyProvider is set to "udpa.annotations.sensitive". However, the content of the
+        // poll_delay field is not sensitive data. To facilitate debugging, we support outputting
+        // the value of the poll_delay field to the config_dump file.
+        if (field_descriptor->name() != "poll_delay") {
+          redact(reflection->MutableMessage(message, field_descriptor), sensitive);
+        }
+#else
         redact(reflection->MutableMessage(message, field_descriptor), sensitive);
+#endif
       }
     } else if (sensitive) {
       // Base case: replace strings and bytes with "[redacted]" and clear all others.

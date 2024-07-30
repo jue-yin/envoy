@@ -3,6 +3,7 @@
 #include "envoy/upstream/thread_local_cluster.h"
 
 #include "test/mocks/http/conn_pool.h"
+#include "test/mocks/redis/mocks.h"
 #include "test/mocks/http/mocks.h"
 #include "test/mocks/tcp/mocks.h"
 
@@ -37,6 +38,9 @@ public:
               (ResourcePriority priority, LoadBalancerContext* context));
   MOCK_METHOD(MockHost::MockCreateConnectionData, tcpConn_, (LoadBalancerContext * context));
   MOCK_METHOD(Http::AsyncClient&, httpAsyncClient, ());
+#if defined(ALIMESH)
+  MOCK_METHOD(Redis::AsyncClient&, redisAsyncClient, ());
+#endif
   MOCK_METHOD(Tcp::AsyncTcpClientPtr, tcpAsyncClient,
               (LoadBalancerContext * context, Tcp::AsyncTcpClientOptionsConstSharedPtr options));
 
@@ -44,6 +48,9 @@ public:
   NiceMock<MockLoadBalancer> lb_;
   NiceMock<Http::ConnectionPool::MockInstance> conn_pool_;
   NiceMock<Http::MockAsyncClient> async_client_;
+#if defined(ALIMESH)
+  NiceMock<Redis::MockRedisAsyncClient> redis_async_client_;
+#endif
   NiceMock<Tcp::ConnectionPool::MockInstance> tcp_conn_pool_;
 };
 

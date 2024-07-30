@@ -29,6 +29,16 @@ MockEncoder::MockEncoder() {
 }
 
 MockEncoder::~MockEncoder() = default;
+#if defined(ALIMESH)
+MockRawEncoder::MockRawEncoder() {
+  ON_CALL(*this, encode(_, _))
+      .WillByDefault(Invoke([this](std::string_view value, Buffer::Instance& out) -> void {
+        real_encoder_.encode(value, out);
+      }));
+}
+
+MockRawEncoder::~MockRawEncoder() = default;
+#endif
 
 MockDecoder::MockDecoder() = default;
 MockDecoder::~MockDecoder() = default;
@@ -52,6 +62,10 @@ MockPoolRequest::~MockPoolRequest() = default;
 
 MockClientCallbacks::MockClientCallbacks() = default;
 MockClientCallbacks::~MockClientCallbacks() = default;
+#if defined(ALIMESH)
+MockRawClientCallbacks::MockRawClientCallbacks() = default;
+MockRawClientCallbacks::~MockRawClientCallbacks() = default;
+#endif
 
 } // namespace Client
 

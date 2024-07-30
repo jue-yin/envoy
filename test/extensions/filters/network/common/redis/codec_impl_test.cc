@@ -426,7 +426,176 @@ TEST_F(RedisEncoderDecoderImplTest, InvalidBulkStringExpectLF) {
   buffer_.add("$1\r\na\ra");
   EXPECT_THROW(decoder_.decode(buffer_), ProtocolError);
 }
+#if defined(ALIMESH)
+class RedisRawEncoderDecoderImplTest : public testing::Test, RawDecoderCallbacks {
+public:
+  RedisRawEncoderDecoderImplTest() : decoder_(*this) {}
 
+  void onRawResponse(std::string&& response) override { decoded_values_.push_back(response); }
+
+  RawEncoderImpl encoder_;
+  RawDecoderImpl decoder_;
+  Buffer::OwnedImpl buffer_;
+  std::vector<std::string> decoded_values_;
+};
+
+TEST_F(RedisRawEncoderDecoderImplTest, Null) {
+  std::string query{"$-1\r\n"};
+  encoder_.encode(query, buffer_);
+  // encoder output should be same to input
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  // decoder output should be same to input
+  EXPECT_EQ(query, decoded_values_[0]);
+  // decoder should consume all character
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, Error) {
+  std::string query{"-Error\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, SimpleString) {
+  std::string query{"+simple string\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, BulkString) {
+  std::string query{"$11\r\nbulk string\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, Integer) {
+  std::string query{":9223372036854775807\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, NegativeIntegerSmall) {
+  std::string query{":-1\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, NegativeIntegerLarge) {
+  std::string query{":-9223372036854775808\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, EmptyArray) {
+  std::string query{"*0\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, Array) {
+  std::string query{"*2\r\n$5\r\nhello\r\n:-5\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, NestArray) {
+  std::string query{"*2\r\n*3\r\n$5\r\nhello\r\n:0\r\n$-1\r\n$5\r\nworld\r\n"};
+  encoder_.encode(query, buffer_);
+  EXPECT_EQ(query, buffer_.toString());
+
+  // Test partial decode
+  for (char c : buffer_.toString()) {
+    Buffer::OwnedImpl temp_buffer(&c, 1);
+    decoder_.decode(temp_buffer);
+    EXPECT_EQ(0UL, temp_buffer.length());
+  }
+
+  EXPECT_EQ(query, decoded_values_[0]);
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, NullArray) {
+  std::string query{"*-1\r\n"};
+  buffer_.add(query);
+  decoder_.decode(buffer_);
+  EXPECT_EQ(query, decoded_values_[0]);
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, MultipleQuery) {
+  std::vector<std::string> queries{
+      "$-1\r\n",
+      "-error\r\n",
+      "+simple string\r\n",
+      "$11\r\nbulk string\r\n",
+      ":9223372036854775807\r\n",
+      ":-1\r\n",
+      ":-9223372036854775808\r\n",
+      "*0\r\n",
+      "*2\r\n$5\r\nhello\r\n:-5\r\n",
+      "*2\r\n*3\r\n$5\r\nhello\r\n:0\r\n$-1\r\n$5\r\nworld\r\n",
+      "*-1\r\n",
+  };
+  for (auto& query : queries) {
+    buffer_.add(query);
+  }
+  decoder_.decode(buffer_);
+  EXPECT_EQ(queries.size(), decoded_values_.size());
+  for (size_t i = 0; i < queries.size(); i++) {
+    EXPECT_EQ(queries.at(i), decoded_values_.at(i));
+  }
+  EXPECT_EQ(0UL, buffer_.length());
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, InvalidType) {
+  buffer_.add("^");
+  EXPECT_THROW(decoder_.decode(buffer_), ProtocolError);
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, InvalidInteger) {
+  buffer_.add(":-a");
+  EXPECT_THROW(decoder_.decode(buffer_), ProtocolError);
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, InvalidIntegerExpectLF) {
+  buffer_.add(":-123\ra");
+  EXPECT_THROW(decoder_.decode(buffer_), ProtocolError);
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, InvalidBulkStringExpectCR) {
+  buffer_.add("$1\r\nab");
+  EXPECT_THROW(decoder_.decode(buffer_), ProtocolError);
+}
+
+TEST_F(RedisRawEncoderDecoderImplTest, InvalidBulkStringExpectLF) {
+  buffer_.add("$1\r\na\ra");
+  EXPECT_THROW(decoder_.decode(buffer_), ProtocolError);
+}
+#endif
 } // namespace Redis
 } // namespace Common
 } // namespace NetworkFilters

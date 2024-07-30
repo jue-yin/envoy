@@ -2750,7 +2750,13 @@ TEST_F(HttpConnectionManagerImplTest, TestSessionTrace) {
 TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteNotFound) {
   setup(false, "", true, true);
   setupFilterChain(1, 0); // Recreate the chain for second stream.
-
+#if defined(ALIMESH)
+  EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
+                  scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
+              getRouteConfig(_, _, _))
+      .Times(2)
+      .WillRepeatedly(Return(nullptr));
+#else
   EXPECT_CALL(*static_cast<const Router::MockScopeKeyBuilder*>(scopeKeyBuilder().ptr()),
               computeScopeKey(_))
       .Times(2);
@@ -2759,6 +2765,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteNotFound) {
               getRouteConfig(_))
       .Times(2)
       .WillRepeatedly(Return(nullptr));
+#endif
   EXPECT_CALL(*codec_, dispatch(_)).WillOnce(Invoke([&](Buffer::Instance& data) -> Http::Status {
     decoder_ = &conn_manager_->newStream(response_encoder_);
     RequestHeaderMapPtr headers{new TestRequestHeaderMapImpl{
@@ -2786,6 +2793,15 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteNotFound) {
 TEST_F(HttpConnectionManagerImplTest, TestSrdsUpdate) {
   setup(false, "", true, true);
 
+#if defined(ALIMESH)
+  EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
+                  scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
+              getRouteConfig(_, _, _))
+      .Times(3)
+      .WillOnce(Return(nullptr))
+      .WillOnce(Return(nullptr))        // refreshCachedRoute first time.
+      .WillOnce(Return(route_config_)); // triggered by callbacks_->route(), SRDS now updated.
+#else
   EXPECT_CALL(*static_cast<const Router::MockScopeKeyBuilder*>(scopeKeyBuilder().ptr()),
               computeScopeKey(_))
       .Times(3);
@@ -2796,6 +2812,8 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsUpdate) {
       .WillOnce(Return(nullptr))
       .WillOnce(Return(nullptr))        // refreshCachedRoute first time.
       .WillOnce(Return(route_config_)); // triggered by callbacks_->route(), SRDS now updated.
+#endif
+
   EXPECT_CALL(*codec_, dispatch(_)).WillOnce(Invoke([&](Buffer::Instance& data) -> Http::Status {
     decoder_ = &conn_manager_->newStream(response_encoder_);
     RequestHeaderMapPtr headers{new TestRequestHeaderMapImpl{
@@ -2849,6 +2867,23 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsCrossScopeReroute) {
   std::shared_ptr<Router::MockRoute> route2 = std::make_shared<NiceMock<Router::MockRoute>>();
   EXPECT_CALL(*route_config1, route(_, _, _, _)).WillRepeatedly(Return(route1));
   EXPECT_CALL(*route_config2, route(_, _, _, _)).WillRepeatedly(Return(route2));
+#if defined(ALIMESH)
+  EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
+                  scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
+              getRouteConfig(_, _, _))
+      // 1. Snap scoped route config;
+      // 2. refreshCachedRoute (both in decodeHeaders(headers,end_stream);
+      // 3. then refreshCachedRoute triggered by decoder_filters_[1]->callbacks_->route().
+      .Times(3)
+      .WillRepeatedly(Invoke([&](const Router::ScopeKeyBuilder*, const Http::HeaderMap& headers,
+                                 const StreamInfo::StreamInfo*) -> Router::ConfigConstSharedPtr {
+        auto& test_headers = dynamic_cast<const TestRequestHeaderMapImpl&>(headers);
+        if (test_headers.get_("scope_key") == "foo") {
+          return route_config1;
+        }
+        return route_config2;
+      }));
+#else
   EXPECT_CALL(*static_cast<const Router::MockScopeKeyBuilder*>(scopeKeyBuilder().ptr()),
               computeScopeKey(_))
       .Times(3)
@@ -2874,6 +2909,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsCrossScopeReroute) {
             }
             return route_config2;
           }));
+#endif
   EXPECT_CALL(*codec_, dispatch(_)).WillOnce(Invoke([&](Buffer::Instance& data) -> Http::Status {
     decoder_ = &conn_manager_->newStream(response_encoder_);
     RequestHeaderMapPtr headers{new TestRequestHeaderMapImpl{
@@ -2921,6 +2957,13 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteFound) {
   std::shared_ptr<Upstream::MockThreadLocalCluster> fake_cluster1 =
       std::make_shared<NiceMock<Upstream::MockThreadLocalCluster>>();
   EXPECT_CALL(cluster_manager_, getThreadLocalCluster(_)).WillOnce(Return(fake_cluster1.get()));
+#if defined(ALIMESH)
+  EXPECT_CALL(*scopedRouteConfigProvider()->config<Router::MockScopedConfig>(),
+              getRouteConfig(_, _, _))
+      // 1. decodeHeaders() snapping route config.
+      // 2. refreshCachedRoute() later in the same decodeHeaders().
+      .Times(2);
+#else
   EXPECT_CALL(*static_cast<const Router::MockScopeKeyBuilder*>(scopeKeyBuilder().ptr()),
               computeScopeKey(_))
       .Times(2);
@@ -2928,6 +2971,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteFound) {
       // 1. decodeHeaders() snapping route config.
       // 2. refreshCachedRoute() later in the same decodeHeaders().
       .Times(2);
+#endif
   EXPECT_CALL(
       *static_cast<const Router::MockConfig*>(
           scopedRouteConfigProvider()->config<Router::MockScopedConfig>()->route_config_.get()),

@@ -84,7 +84,14 @@ public:
   // Implicit conversion to absl::string_view.
   operator absl::string_view() const { return string_; }
 
+#if defined(ALIMESH)
+  virtual ~LowerCaseString() = default;
+
+protected:
+#else
 private:
+#endif
+
   void lower() {
     std::transform(string_.begin(), string_.end(), string_.begin(), absl::ascii_tolower);
   }

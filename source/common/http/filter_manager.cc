@@ -421,8 +421,22 @@ const Buffer::Instance* ActiveStreamDecoderFilter::decodingBuffer() {
   return parent_.buffered_request_data_.get();
 }
 
+#if defined(ALIMESH)
 void ActiveStreamDecoderFilter::modifyDecodingBuffer(
     std::function<void(Buffer::Instance&)> callback) {
+  modifyDecodingBuffer(callback, false);
+}
+void ActiveStreamDecoderFilter::modifyDecodingBuffer(
+    std::function<void(Buffer::Instance&)> callback, bool backup_for_replace) {
+  // Backup the original buffer only during the first replacement.
+  if (backup_for_replace && !parent_.original_buffered_request_data_) {
+    parent_.original_buffered_request_data_ = std::make_unique<Buffer::OwnedImpl>();
+    parent_.original_buffered_request_data_->move(*parent_.buffered_request_data_.get());
+  }
+#else
+void ActiveStreamDecoderFilter::modifyDecodingBuffer(
+    std::function<void(Buffer::Instance&)> callback) {
+#endif
   ASSERT(parent_.state_.latest_data_decoding_filter_ == this);
   callback(*parent_.buffered_request_data_.get());
 }
@@ -1535,7 +1549,15 @@ void ActiveStreamDecoderFilter::setDecoderBufferLimit(uint32_t limit) {
 
 uint32_t ActiveStreamDecoderFilter::decoderBufferLimit() { return parent_.buffer_limit_; }
 
+#if defined(ALIMESH)
 bool ActiveStreamDecoderFilter::recreateStream(const ResponseHeaderMap* headers) {
+  return recreateStream(headers, false);
+}
+bool ActiveStreamDecoderFilter::recreateStream(const ResponseHeaderMap* headers,
+                                               bool use_original_request_body) {
+#else
+bool ActiveStreamDecoderFilter::recreateStream(const ResponseHeaderMap* headers) {
+#endif
   // Because the filter's and the HCM view of if the stream has a body and if
   // the stream is complete may differ, re-check bytesReceived() to make sure
   // there was no body from the HCM's point of view.
@@ -1558,7 +1580,12 @@ bool ActiveStreamDecoderFilter::recreateStream(const ResponseHeaderMap* headers)
     parent_.filter_manager_callbacks_.chargeStats(*headers);
   }
 
+#if defined(ALIMESH)
+  parent_.filter_manager_callbacks_.recreateStream(parent_.streamInfo().filterState(),
+                                                   use_original_request_body);
+#else
   parent_.filter_manager_callbacks_.recreateStream(parent_.streamInfo().filterState());
+#endif
 
   return true;
 }

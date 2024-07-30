@@ -137,7 +137,18 @@ void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onInterval() {
     client_->addReadFilter(session_callbacks_);
 
     expect_close_ = false;
+#if defined(ALIMESH)
+    try {
+      client_->connect();
+    } catch (const EnvoyException& ex) {
+      ENVOY_CONN_LOG(critical,
+                     "envoy exception raised in TcpActiveHealthCheckSession::onInterval(): {}",
+                     *client_, ex.what());
+      return;
+    }
+#else
     client_->connect();
+#endif
     client_->noDelay(true);
   }
 

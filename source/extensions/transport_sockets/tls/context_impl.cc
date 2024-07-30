@@ -235,6 +235,7 @@ ContextImpl::ContextImpl(Stats::Scope& scope, const Envoy::Ssl::ContextConfig& c
         ctx.is_ecdsa_ = true;
       } break;
       case EVP_PKEY_RSA: {
+#if !defined(ALIMESH)
         // We require RSA certificates with 2048-bit or larger keys.
         const RSA* rsa_public_key = EVP_PKEY_get0_RSA(public_key.get());
         // Since we checked the key type above, this should be valid.
@@ -254,6 +255,7 @@ ContextImpl::ContextImpl(Stats::Scope& scope, const Envoy::Ssl::ContextConfig& c
                           "certificates with 2048-bit or larger keys are supported",
                           ctx.cert_chain_file_path_));
         }
+#endif
 #endif
       } break;
 #ifdef BORINGSSL_FIPS

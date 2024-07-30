@@ -1751,6 +1751,19 @@ TEST(DurationUtilTest, NoThrow) {
   }
 }
 
+#if defined(ALIMESH)
+TEST(DurationUtilTest, ConvertDurationToJsonString) {
+  {
+    ProtobufWkt::Duration duration;
+    duration.set_nanos(20000000);
+    EXPECT_EQ(20, DurationUtil::durationToMilliseconds(duration));
+    MessageUtil::redact(duration);
+    auto duration_str = MessageUtil::getJsonStringFromMessageOrError(duration);
+    EXPECT_STREQ("\"0.020s\"", duration_str.c_str());
+  }
+}
+#endif
+
 // Verify WIP accounting of the file based annotations. This test uses the strict validator to test
 // that code path.
 TEST_F(ProtobufUtilityTest, MessageInWipFile) {

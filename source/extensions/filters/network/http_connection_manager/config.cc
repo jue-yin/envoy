@@ -219,9 +219,9 @@ Utility::Singletons Utility::createSingletons(Server::Configuration::FactoryCont
 
   auto tracer_manager = Tracing::TracerManagerImpl::singleton(context);
 
-  std::shared_ptr<Http::DownstreamFilterConfigProviderManager> filter_config_provider_manager =
-      Http::FilterChainUtility::createSingletonDownstreamFilterConfigProviderManager(
-          context.getServerFactoryContext());
+  Server::Configuration::DownstreamHTTPFilterConfigProviderManagerSharedPtr
+      filter_config_provider_manager =
+          context.getServerFactoryContext().downstreamHttpFilterConfigProviderManager();
 
   return {date_provider, route_config_provider_manager, scoped_routes_config_provider_manager,
           tracer_manager, filter_config_provider_manager};
@@ -385,7 +385,13 @@ HttpConnectionManagerConfig::HttpConnectionManagerConfig(
           createHeaderValidatorFactory(config, context.getServerFactoryContext())),
       append_x_forwarded_port_(config.append_x_forwarded_port()),
       add_proxy_protocol_connection_state_(
+#if defined(ALIMESH)
+          PROTOBUF_GET_WRAPPED_OR_DEFAULT(config, add_proxy_protocol_connection_state, true)),
+      keepalive_header_timeout_(PROTOBUF_GET_SECONDS_OR_DEFAULT(config, keepalive_header_timeout,
+                                                                KeepaliveHeaderTimeoutSeconds)) {
+#else
           PROTOBUF_GET_WRAPPED_OR_DEFAULT(config, add_proxy_protocol_connection_state, true)) {
+#endif
   if (!idle_timeout_) {
     idle_timeout_ = std::chrono::hours(1);
   } else if (idle_timeout_.value().count() == 0) {

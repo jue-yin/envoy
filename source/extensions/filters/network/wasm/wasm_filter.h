@@ -31,13 +31,40 @@ public:
     if (!tls_slot_->currentThreadRegistered()) {
       return nullptr;
     }
-    PluginHandleSharedPtr handle = tls_slot_->get()->handle();
+    auto opt_ref = tls_slot_->get();
+    if (!opt_ref) {
+      return nullptr;
+    }
+    PluginHandleSharedPtr handle = opt_ref->handle();
     if (!handle) {
       return nullptr;
     }
     if (handle->wasmHandle()) {
       wasm = handle->wasmHandle()->wasm().get();
     }
+#if defined(ALIMESH)
+    auto failed = false;
+    if (!wasm) {
+      failed = true;
+    } else if (wasm->isFailed()) {
+      ENVOY_LOG(info, "wasm vm is crashed, try to recover");
+      if (opt_ref->recover()) {
+        ENVOY_LOG(info, "wasm vm recover success");
+        wasm = opt_ref->handle()->wasmHandle()->wasm().get();
+      } else {
+        ENVOY_LOG(info, "wasm vm recover failed");
+        failed = true;
+      }
+    }
+    if (failed) {
+      if (handle->plugin()->fail_open_) {
+        return nullptr; // Fail open skips adding this filter to callbacks.
+      } else {
+        return std::make_shared<Context>(nullptr, 0,
+                                         handle); // Fail closed is handled by an empty Context.
+      }
+    }
+#else
     if (!wasm || wasm->isFailed()) {
       if (handle->plugin()->fail_open_) {
         return nullptr; // Fail open skips adding this filter to callbacks.
@@ -46,6 +73,7 @@ public:
                                          handle); // Fail closed is handled by an empty Context.
       }
     }
+#endif
     return std::make_shared<Context>(wasm, handle->rootContextId(), handle);
   }
 

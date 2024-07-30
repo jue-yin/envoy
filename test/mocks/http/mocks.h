@@ -260,6 +260,10 @@ public:
   MOCK_METHOD(void, setDecoderBufferLimit, (uint32_t));
   MOCK_METHOD(uint32_t, decoderBufferLimit, ());
   MOCK_METHOD(bool, recreateStream, (const ResponseHeaderMap* headers));
+#if defined(ALIMESH)
+  MOCK_METHOD(bool, recreateStream,
+              (const ResponseHeaderMap* headers, bool use_original_request_body));
+#endif
   MOCK_METHOD(void, addUpstreamSocketOptions, (const Network::Socket::OptionsSharedPtr& options));
   MOCK_METHOD(Network::Socket::OptionsSharedPtr, getUpstreamSocketOptions, (), (const));
   MOCK_METHOD(const Router::RouteSpecificFilterConfig*, mostSpecificPerFilterConfig, (), (const));
@@ -303,6 +307,9 @@ public:
   MOCK_METHOD(RequestTrailerMap&, addDecodedTrailers, ());
   MOCK_METHOD(MetadataMapVector&, addDecodedMetadata, ());
   MOCK_METHOD(const Buffer::Instance*, decodingBuffer, ());
+#if defined(ALIMESH)
+  MOCK_METHOD(void, modifyDecodingBuffer, (std::function<void(Buffer::Instance&)>, bool));
+#endif
   MOCK_METHOD(void, modifyDecodingBuffer, (std::function<void(Buffer::Instance&)>));
   MOCK_METHOD(void, encode1xxHeaders_, (HeaderMap & headers));
   MOCK_METHOD(void, encodeHeaders_, (ResponseHeaderMap & headers, bool end_stream));
@@ -671,6 +678,9 @@ public:
   MOCK_METHOD(ServerHeaderValidatorPtr, makeHeaderValidator, (Protocol protocol));
   MOCK_METHOD(bool, appendXForwardedPort, (), (const));
   MOCK_METHOD(bool, addProxyProtocolConnectionState, (), (const));
+#if defined(ALIMESH)
+  MOCK_METHOD(std::chrono::seconds, keepaliveHeaderTimeout, (), (const));
+#endif
 
   std::unique_ptr<Http::InternalAddressConfig> internal_address_config_ =
       std::make_unique<DefaultInternalAddressConfig>();
@@ -933,7 +943,40 @@ MATCHER_P(HeaderMapEqualWithMaxSize, rhs, "") {
 }
 
 MATCHER_P(HeaderMapEqualRef, rhs, "") {
-  const bool equal = (arg == *rhs);
+#if defined(ALIMESH)
+  bool equal = true;
+
+  auto getHeaderItems = [](const Envoy::Http::HeaderMap& header,
+                           std::vector<std::pair<absl::string_view, absl::string_view>>& dst) {
+    auto f = [&dst](const Envoy::Http::HeaderEntry& header) -> Envoy::Http::HeaderMap::Iterate {
+      dst.push_back(std::make_pair(header.key().getStringView(), header.value().getStringView()));
+      return Envoy::Http::HeaderMap::Iterate::Continue;
+    };
+
+    header.iterate(f);
+  };
+
+  std::vector<std::pair<absl::string_view, absl::string_view>> arg_header, rhs_header;
+
+  getHeaderItems(arg, arg_header);
+  getHeaderItems((*rhs), rhs_header);
+
+  auto i = arg_header.begin();
+  auto j = rhs_header.begin();
+
+  for (; i != arg_header.end(); ++i, ++j) {
+
+    if (i->first == "req-start-time") {
+      continue;
+    }
+    if (i->first != j->first || i->second != j->second) {
+      equal = false;
+      break;
+    }
+  }
+#else
+  const bool equal = (arg == *rhs)
+#endif
   if (!equal) {
     *result_listener << "\n"
                      << TestUtility::addLeftAndRightPadding("header map:") << "\n"

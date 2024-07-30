@@ -11,6 +11,7 @@ envoy_extension_package()
 envoy_cc_library(
     name = "factory_base_lib",
     hdrs = ["factory_base.h"],
+    visibility = ["//visibility:public"],
     deps = [
         "//envoy/server:tracer_config_interface",
         "//source/common/config:utility_lib",

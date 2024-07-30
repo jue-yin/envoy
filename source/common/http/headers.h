@@ -128,6 +128,17 @@ public:
     const std::string AcceptEncoding{"Accept-Encoding"};
     const std::string Wildcard{"*"};
   } VaryValues;
+
+#if defined(ALIMESH)
+  struct {
+    const LowerCaseString TriArriveTime{"req-arrive-time"};
+    const LowerCaseString TriCostTime{"req-cost-time"};
+    const LowerCaseString TriStartTime{"req-start-time"};
+    const LowerCaseString TriRespStartTime{"resp-start-time"};
+    const LowerCaseString EnvoyOriginalHost{"original-host"};
+    const LowerCaseString XEnvoyOriginalHost{"x-envoy-original-host"};
+  } AliExtendedValues;
+#endif
 };
 
 using CustomHeaders = ConstSingleton<CustomHeaderValues>;

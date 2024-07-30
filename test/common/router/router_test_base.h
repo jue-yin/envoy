@@ -51,6 +51,16 @@ public:
     return &downstream_connection_;
   }
 
+#if defined(ALIMESH)
+  Http::FilterHeadersStatus decodeHeaders(Http::RequestHeaderMap& headers,
+                                          bool end_stream) override {
+    auto status = Filter::decodeHeaders(headers, end_stream);
+    // TODO: deletes the header and consider using custom headers.
+    headers.remove(Http::CustomHeaders::get().AliExtendedValues.TriStartTime);
+    return status;
+  }
+#endif
+
   NiceMock<Network::MockConnection> downstream_connection_;
   MockRetryState* retry_state_{};
   bool reject_all_hosts_ = false;
@@ -89,7 +99,15 @@ public:
   void expectNewStreamWithImmediateEncoder(Http::RequestEncoder& encoder,
                                            Http::ResponseDecoder** decoder,
                                            Http::Protocol protocol);
+#if defined(ALIMESH)
+  void enableActiveRedirects(std::string redirect_url, uint32_t max_internal_redirects = 1,
+                             bool forced_use_original_host = false,
+                             bool forced_add_header_before_route_matcher = false);
+  void setNumPreviousActiveRedirect(uint32_t num_previous_redirects);
 
+  Http::ResponseHeaderMapPtr active_redirect_headers_{
+      new Http::TestResponseHeaderMapImpl{{":status", "502"}, {"location", "http://www.foo.com"}}};
+#endif
   Event::SimulatedTimeSystem test_time_;
   std::string upstream_zone_{"to_az"};
   envoy::config::core::v3::Locality upstream_locality_;

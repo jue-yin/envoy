@@ -38,6 +38,11 @@ CONTRIB_V3_ALLOW_LIST = [
     'envoy.extensions.filters.network.kafka_broker.v3',
     'envoy.extensions.filters.network.mysql_proxy.v3',
     'envoy.extensions.filters.network.rocketmq_proxy.v3',
+
+    # Ingress gateway.
+    'envoy.extensions.filters.http.http_dubbo_transcoder.v3',
+    'envoy.extensions.custom_cluster_plugins.cluster_fallback.v3',
+    'envoy.extensions.upstreams.http.dubbo_tcp.v3',
 ]
 
 BUILD_FILE_TEMPLATE = string.Template(

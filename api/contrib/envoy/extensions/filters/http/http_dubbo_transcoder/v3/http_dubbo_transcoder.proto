@@ -1,0 +1,120 @@
+syntax = "proto3";
+
+package envoy.extensions.filters.http.http_dubbo_transcoder.v3;
+
+import "google/protobuf/wrappers.proto";
+
+import "udpa/annotations/status.proto";
+import "udpa/annotations/versioning.proto";
+import "validate/validate.proto";
+
+option java_package = "io.envoyproxy.envoy.extensions.filters.http.http_dubbo_transcoder.v3";
+option java_outer_classname = "HttpDubboTranscoderProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/http_dubbo_transcoder/v3;http_dubbo_transcoderv3";
+option (udpa.annotations.file_status).package_version_status = ACTIVE;
+
+// [#protodoc-title: Buffer]
+// Buffer :ref:`configuration overview <config_http_filters_buffer>`.
+// [#extension: envoy.filters.http.buffer]
+message HttpDubboTranscoder {
+  enum UrlUnescapeSpec {
+    // URL path parameters will not decode RFC 6570 reserved characters.
+    // For example, segment `%2f%23/%20%2523` is unescaped to `%2f%23/ %23`.
+    ALL_CHARACTERS_EXCEPT_RESERVED = 0;
+
+    // URL path parameters will be fully URI-decoded except in
+    // cases of single segment matches in reserved expansion, where "%2F" will be
+    // left encoded.
+    // For example, segment `%2f%23/%20%2523` is unescaped to `%2f#/ %23`.
+    ALL_CHARACTERS_EXCEPT_SLASH = 1;
+
+    // URL path parameters will be fully URI-decoded.
+    // For example, segment `%2f%23/%20%2523` is unescaped to `/#/ %23`.
+    ALL_CHARACTERS = 2;
+  }
+
+  message RequestValidateOptions {
+    // default this trascoder will pass the request which contains unknown query paramters,
+    // if this option set to true, the request will be reject with 400 Bad Request.
+    bool reject_unknown_query_parameters = 1;
+
+    bool reject_unknown_method = 2;
+  }
+
+  message DubboMethodMapping {
+    enum MatchHttpMethodSpec {
+      ALL_GET = 0;
+      ALL_POST = 1;
+      ALL_PUT = 2;
+      ALL_DELETE = 3;
+      ALL_PATCH = 4;
+    }
+
+    message ParameterMapping {
+      enum ExtractKeySpec {
+        ALL_QUERY_PARAMETER = 0;
+        ALL_HEADER = 1;
+        ALL_PATH = 2;
+        ALL_BODY = 3;
+      }
+
+      ExtractKeySpec extract_key_spec = 1;
+
+      string extract_key = 2;
+
+      string mapping_type = 3;
+    }
+
+    message PathMatcher {
+      string match_pattern = 1;
+
+      MatchHttpMethodSpec match_http_method_spec = 2;
+    }
+
+    message PassthroughSetting {
+      message PassthroughHeaders {
+        repeated string keys = 1;
+      }
+
+      oneof headers_setting {
+        bool passthrough_all_headers = 1;
+
+        PassthroughHeaders passthrough_headers = 2;
+      }
+    }
+
+    string name = 1 [(validate.rules).string = {min_len: 1}];
+
+    PathMatcher path_matcher = 2;
+
+    repeated ParameterMapping parameter_mapping = 3;
+
+    PassthroughSetting passthrough_setting = 4;
+  }
+
+  message DubboServiceMapping {
+    string name = 1 [(validate.rules).string = {min_len: 1}];
+
+    string version = 2;
+
+    repeated DubboMethodMapping method_mapping = 3;
+
+    string group = 4;
+  }
+
+  // Configure the behavior when handling requests that cannot be transcoded.
+  //
+  // By default, the transcoder will silently pass through HTTP requests that are malformed.
+  // This includes requests with unknown query parameters, unregister paths, etc.
+  RequestValidateOptions request_validation_options = 2;
+
+  // URL unescaping policy.
+  // This spec is only applied when extracting variable with multiple segments in the URL path.
+  // For example, in case of `/foo/{x=*}/bar/{y=prefix/*}/{z=**}` `x` variable is single segment and `y` and `z` are multiple segments.
+  // For a path with `/foo/first/bar/prefix/second/third/fourth`, `x=first`, `y=prefix/second`, `z=third/fourth`.
+  // If this setting is not specified, the value defaults to :ref:`ALL_CHARACTERS_EXCEPT_RESERVED<envoy_v3_api_enum_value_extensions.filters.http.http_dubbo_transcoder.v3.HttpDubboTranscoder.UrlUnescapeSpec.ALL_CHARACTERS_EXCEPT_RESERVED>`.
+  UrlUnescapeSpec url_unescape_spec = 3 [(validate.rules).enum = {defined_only: true}];
+
+  repeated DubboServiceMapping services_mapping = 4;
+}

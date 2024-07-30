@@ -8,6 +8,7 @@
 #include "source/common/common/enum_to_int.h"
 #include "source/common/common/fmt.h"
 #include "source/common/common/matchers.h"
+#include "source/common/common/utility.h"
 #include "source/common/http/async_client_impl.h"
 #include "source/common/http/codes.h"
 #include "source/common/runtime/runtime_features.h"
@@ -275,6 +276,26 @@ void RawHttpClientImpl::onBeforeFinalizeUpstreamSpan(
   }
 }
 
+#if defined(ALIMESH)
+bool isAuthorizationPass(const Http::ResponseHeaderMap& headers) {
+  const uint64_t status_code = Http::Utility::getResponseStatus(headers);
+
+  // The HTTP status code is first condition.
+  if (status_code != enumToInt(Http::Code::OK)) {
+    return false;
+  }
+
+  const auto& get_result = headers.get(Headers::get().XMseExternalAuthzCheckResult);
+  // If x-mse-external-authz-check-result doesn't exist or has more than one value,
+  // we think this case is allowed.
+  if (get_result.size() != 1) {
+    return true;
+  }
+
+  return absl::EqualsIgnoreCase(StringUtil::trim(get_result[0]->value().getStringView()), "true");
+}
+#endif
+
 ResponsePtr RawHttpClientImpl::toResponse(Http::ResponseMessagePtr message) {
   const uint64_t status_code = Http::Utility::getResponseStatus(message->headers());
 
@@ -311,7 +332,11 @@ ResponsePtr RawHttpClientImpl::toResponse(Http::ResponseMessagePtr message) {
   message->headers().remove(storage_header_name);
 
   // Create an Ok authorization response.
+#if !defined(ALIMESH)
   if (status_code == enumToInt(Http::Code::OK)) {
+#else
+  if (isAuthorizationPass(message->headers())) {
+#endif
     SuccessResponse ok{message->headers(),
                        config_->upstreamHeaderMatchers(),
                        config_->upstreamHeaderToAppendMatchers(),

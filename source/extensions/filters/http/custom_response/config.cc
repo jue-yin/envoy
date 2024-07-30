@@ -47,7 +47,14 @@ createMatcher(const envoy::extensions::filters::http::custom_response::v3::Custo
 FilterConfig::FilterConfig(
     const envoy::extensions::filters::http::custom_response::v3::CustomResponse& config,
     Server::Configuration::ServerFactoryContext& context, Stats::StatName stats_prefix)
-    : stats_prefix_(stats_prefix), matcher_{createMatcher(config, context, stats_prefix)} {}
+#if defined(ALIMESH)
+    : stats_prefix_(stats_prefix), matcher_{createMatcher(config, context, stats_prefix)},
+      max_request_bytes_(config.with_request_body().max_request_bytes()) {
+}
+#else
+    : stats_prefix_(stats_prefix), matcher_{createMatcher(config, context, stats_prefix)} {
+}
+#endif
 
 PolicySharedPtr FilterConfig::getPolicy(const ::Envoy::Http::ResponseHeaderMap& headers,
                                         const StreamInfo::StreamInfo& stream_info) const {

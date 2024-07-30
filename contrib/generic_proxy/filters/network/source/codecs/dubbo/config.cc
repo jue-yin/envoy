@@ -87,7 +87,7 @@ void DubboRequest::forEach(IterateCallback callback) const {
         pair.second->type() == Hessian2::Object::Type::String) {
       ASSERT(pair.first->toString().has_value() && pair.second->toString().has_value());
 
-      if (!callback(pair.first->toString().value().get(), pair.second->toString().value().get())) {
+      if (!callback(*(pair.first->toString().value()), *(pair.second->toString().value()))) {
         break;
       }
     }

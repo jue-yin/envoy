@@ -38,6 +38,10 @@ MockServerFactoryContext::~MockServerFactoryContext() = default;
 MockStatsConfig::MockStatsConfig() = default;
 MockStatsConfig::~MockStatsConfig() = default;
 
+StatelessMockServerFactoryContext::StatelessMockServerFactoryContext()
+    : filter_config_provider_manager_(
+          std::make_shared<Filter::HttpFilterConfigProviderManagerImpl>()) {}
+
 } // namespace Configuration
 } // namespace Server
 } // namespace Envoy

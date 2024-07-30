@@ -18,6 +18,11 @@
 #include "source/common/protobuf/message_validator_impl.h"
 #include "source/common/router/scoped_rds.h"
 
+#if defined(ALIMESH)
+#include "source/common/network/address_impl.h"
+#include "test/mocks/stream_info/mocks.h"
+#endif
+
 #include "test/mocks/config/mocks.h"
 #include "test/mocks/matcher/mocks.h"
 #include "test/mocks/protobuf/mocks.h"
@@ -41,6 +46,9 @@ using testing::IsNull;
 using testing::NiceMock;
 using testing::Return;
 using testing::ReturnRef;
+#if defined(ALIMESH)
+using testing::ReturnPointee;
+#endif
 
 namespace Envoy {
 namespace Router {
@@ -331,6 +339,78 @@ dynamic_scoped_route_configs:
 
 class ScopedRdsTest : public ScopedRoutesTestBase {
 protected:
+#if defined(ALIMESH)
+  void setupHostScope(const OptionalHttpFilters optional_http_filters = OptionalHttpFilters()) {
+    ON_CALL(server_factory_context_.cluster_manager_, adsMux())
+        .WillByDefault(Return(std::make_shared<::Envoy::Config::NullGrpcMuxImpl>()));
+
+    InSequence s;
+    // Since server_factory_context_.cluster_manager_.subscription_factory_.callbacks_ is taken by
+    // the SRDS subscription. We need to return a different MockSubscription here for each RDS
+    // subscription. To build the map from RDS route_config_name to the RDS subscription, we need to
+    // get the route_config_name by mocking start() on the Config::Subscription.
+
+    // srds subscription
+    EXPECT_CALL(server_factory_context_.cluster_manager_.subscription_factory_,
+                subscriptionFromConfigSource(_, _, _, _, _, _))
+        .Times(AnyNumber());
+    // rds subscription
+    EXPECT_CALL(
+        server_factory_context_.cluster_manager_.subscription_factory_,
+        subscriptionFromConfigSource(
+            _,
+            Eq(Grpc::Common::typeUrl(
+                envoy::config::route::v3::RouteConfiguration().GetDescriptor()->full_name())),
+            _, _, _, _))
+        .Times(AnyNumber())
+        .WillRepeatedly(
+            Invoke([this](const envoy::config::core::v3::ConfigSource&, absl::string_view,
+                          Stats::Scope&, Envoy::Config::SubscriptionCallbacks& callbacks,
+                          Envoy::Config::OpaqueResourceDecoderSharedPtr,
+                          const Envoy::Config::SubscriptionOptions&) {
+              auto ret = std::make_unique<NiceMock<Envoy::Config::MockSubscription>>();
+              rds_subscription_by_config_subscription_[ret.get()] = &callbacks;
+              EXPECT_CALL(*ret, start(_))
+                  .WillOnce(Invoke([this, config_sub_addr = ret.get()](
+                                       const absl::flat_hash_set<std::string>& resource_names) {
+                    EXPECT_EQ(resource_names.size(), 1);
+                    auto iter = rds_subscription_by_config_subscription_.find(config_sub_addr);
+                    EXPECT_NE(iter, rds_subscription_by_config_subscription_.end());
+                    rds_subscription_by_name_[*resource_names.begin()] = iter->second;
+                  }));
+              return ret;
+            }));
+
+    ON_CALL(context_init_manager_, add(_)).WillByDefault(Invoke([this](const Init::Target& target) {
+      target_handles_.push_back(target.createHandle("test"));
+    }));
+    ON_CALL(context_init_manager_, initialize(_))
+        .WillByDefault(Invoke([this](const Init::Watcher& watcher) {
+          for (auto& handle_ : target_handles_) {
+            handle_->initialize(watcher);
+          }
+        }));
+
+    const std::string config_yaml = R"EOF(
+name: foo_scoped_routes
+scope_key_builder:
+  fragments:
+  - local_port_value_extractor: {}
+  - host_value_extractor: {}
+)EOF";
+    envoy::extensions::filters::network::http_connection_manager::v3::ScopedRoutes
+        scoped_routes_config;
+    TestUtility::loadFromYaml(config_yaml, scoped_routes_config);
+    auto scope_key_builder_config = scoped_routes_config.scope_key_builder();
+    scope_key_builder_ = std::make_unique<ScopeKeyBuilderImpl>(std::move(scope_key_builder_config));
+    provider_ = config_provider_manager_->createXdsConfigProvider(
+        scoped_routes_config.scoped_rds(), server_factory_context_, context_init_manager_, "foo.",
+        ScopedRoutesConfigProviderManagerOptArg(scoped_routes_config.name(),
+                                                scoped_routes_config.rds_config_source(),
+                                                optional_http_filters));
+    srds_subscription_ = server_factory_context_.cluster_manager_.subscription_factory_.callbacks_;
+  }
+#endif
   void setup(const OptionalHttpFilters optional_http_filters = OptionalHttpFilters()) {
     ON_CALL(server_factory_context_.cluster_manager_, adsMux())
         .WillByDefault(Return(std::make_shared<::Envoy::Config::NullGrpcMuxImpl>()));
@@ -1814,7 +1894,6 @@ scope_key_builder:
                                               scoped_routes_config.rds_config_source(),
                                               OptionalHttpFilters()));
   srds_subscription_ = server_factory_context_.cluster_manager_.subscription_factory_.callbacks_;
-
   const std::string config_yaml = R"EOF(
 name: foo_scope
 route_configuration_name: foo_routes
@@ -1836,6 +1915,274 @@ key:
   ASSERT_THAT(config, Not(IsNull()));
   EXPECT_EQ(config->name(), "foo_routes");
 }
+
+#if defined(ALIMESH)
+TEST_F(ScopedRdsTest, HostScopeMultipleResourcesSotw) {
+  setupHostScope();
+
+  const std::string config_yaml = R"EOF(
+name: foo_scope
+route_configuration_name: foo_routes
+key:
+  fragments:
+    - string_key: "80"
+    - string_key: www.example.com
+)EOF";
+  const auto resource = parseScopedRouteConfigurationFromYaml(config_yaml);
+  const std::string config_yaml2 = R"EOF(
+name: foo_scope2
+route_configuration_name: foo_routes_wildcard
+key:
+  fragments:
+    - string_key: "80"
+    - string_key: "*.com"
+)EOF";
+  const auto resource_2 = parseScopedRouteConfigurationFromYaml(config_yaml2);
+  init_watcher_.expectReady(); // Only the SRDS parent_init_target_.
+  context_init_manager_.initialize(init_watcher_);
+  const auto decoded_resources = TestUtility::decodeResources({resource, resource_2});
+  EXPECT_NO_THROW(srds_subscription_->onConfigUpdate(decoded_resources.refvec_, "1"));
+  EXPECT_EQ(1UL,
+            server_factory_context_.store_.counter("foo.scoped_rds.foo_scoped_routes.config_reload")
+                .value());
+  EXPECT_EQ(2UL, all_scopes_.value());
+  EXPECT_EQ(2UL, active_scopes_.value());
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+
+  // Verify the config is a ScopedConfigImpl instance, both scopes point to "" as RDS hasn't
+  // kicked in yet(NullConfigImpl returned).
+  ASSERT_THAT(getScopedRdsProvider(), Not(IsNull()));
+  ASSERT_THAT(getScopedRdsProvider()->config<ScopedConfigImpl>(), Not(IsNull()));
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.example.com"}},
+                                 &stream_info)
+                ->name(),
+            "");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.test.com"}},
+                                 &stream_info)
+                ->name(),
+            "");
+  // RDS updates foo_routes.
+  pushRdsConfig({"foo_routes"}, "111");
+  pushRdsConfig({"foo_routes_wildcard"}, "111");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.example.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.test.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes_wildcard");
+
+  // Delete foo_scope2.
+  const auto decoded_resources_2 = TestUtility::decodeResources({resource_2});
+  EXPECT_NO_THROW(srds_subscription_->onConfigUpdate(decoded_resources_2.refvec_, "3"));
+  EXPECT_EQ(1UL, all_scopes_.value());
+  EXPECT_EQ(getScopedRouteMap().count("foo_scope"), 0);
+  EXPECT_EQ(getScopedRouteMap().count("foo_scope2"), 1);
+  EXPECT_EQ(2UL,
+            server_factory_context_.store_.counter("foo.scoped_rds.foo_scoped_routes.config_reload")
+                .value());
+  EXPECT_TRUE(server_factory_context_.store_.findGaugeByString(
+      "foo.scoped_rds.foo_scoped_routes.config_reload_time_ms"));
+
+  // now scope key "x-bar-key" points to nowhere.
+  EXPECT_THAT(getScopedRdsProvider()
+                  ->config<ScopedConfigImpl>()
+                  ->getRouteConfig(scope_key_builder_.get(),
+                                   TestRequestHeaderMapImpl{{":authority", "www.example.com"}},
+                                   &stream_info)
+                  ->name(),
+              "foo_routes_wildcard");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.test.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes_wildcard");
+}
+
+// Push Rds update after on demand request, route configuration should be initialized.
+TEST_F(ScopedRdsTest, HostScopePushRdsAfterOndemandRequest) {
+  setupHostScope();
+  init_watcher_.expectReady();
+  context_init_manager_.initialize(init_watcher_);
+  // Scope should be loaded eagerly by default.
+  const std::string eager_resource = R"EOF(
+name: foo_scope
+route_configuration_name: foo_routes
+key:
+  fragments:
+    - string_key: "80"
+    - string_key: www.example.com
+)EOF";
+
+  // On demand scope should be loaded lazily.
+  const std::string lazy_resource = R"EOF(
+name: foo_scope2
+route_configuration_name: foo_routes_wildcard
+on_demand: true
+key:
+  fragments:
+    - string_key: "80"
+    - string_key: "*.com"
+)EOF";
+
+  srdsUpdateWithYaml({eager_resource, lazy_resource}, "1");
+  EXPECT_EQ(1UL,
+            server_factory_context_.store_.counter("foo.scoped_rds.foo_scoped_routes.config_reload")
+                .value());
+  EXPECT_EQ(2UL, all_scopes_.value());
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+
+  // Verify the config is a ScopedConfigImpl instance, both scopes point to "" as RDS hasn't kicked
+  // in yet(NullConfigImpl returned).
+  ASSERT_THAT(getScopedRdsProvider(), Not(IsNull()));
+  ASSERT_THAT(getScopedRdsProvider()->config<ScopedConfigImpl>(), Not(IsNull()));
+  pushRdsConfig({"foo_routes"}, "111");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.example.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes");
+  EXPECT_THAT(getScopedRdsProvider()->config<ScopedConfigImpl>()->getRouteConfig(
+                  scope_key_builder_.get(),
+                  TestRequestHeaderMapImpl{{":authority", "www.test.com"}}, &stream_info),
+              IsNull());
+
+  EXPECT_EQ(1UL, active_scopes_.value());
+
+  ScopeKeyPtr scope_key = getScopedRdsProvider()->config<ScopedConfigImpl>()->computeScopeKey(
+      scope_key_builder_.get(), TestRequestHeaderMapImpl{{":authority", "www.test.com"}},
+      &stream_info);
+  EXPECT_CALL(event_dispatcher_, post(_));
+  std::function<void(bool)> route_config_updated_cb = [](bool route_exist) {
+    EXPECT_EQ(true, route_exist);
+  };
+  getScopedRdsProvider()->onDemandRdsUpdate(std::move(scope_key), event_dispatcher_,
+                                            std::move(route_config_updated_cb));
+  // After on demand request, push rds update, both scopes should find the route configuration.
+  pushRdsConfig({"foo_routes_wildcard"}, "111");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.example.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.test.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes_wildcard");
+  // Now we have 1 active on demand scope and 1 eager loading scope.
+  EXPECT_EQ(2UL, all_scopes_.value());
+  EXPECT_EQ(2UL, active_scopes_.value());
+  EXPECT_EQ(1UL, on_demand_scopes_.value());
+}
+
+TEST_F(ScopedRdsTest, HostScopePushRdsBeforeOndemandRequest) {
+  setupHostScope();
+  init_watcher_.expectReady();
+  context_init_manager_.initialize(init_watcher_);
+  // Scope should be loaded eagerly by default.
+  const std::string eager_resource = R"EOF(
+name: foo_scope
+route_configuration_name: foo_routes
+key:
+  fragments:
+    - string_key: "80"
+    - string_key: www.example.com
+)EOF";
+
+  // On demand scope should be loaded lazily.
+  const std::string lazy_resource = R"EOF(
+name: foo_scope2
+route_configuration_name: foo_routes
+on_demand: true
+key:
+  fragments:
+    - string_key: "80"
+    - string_key: "*.com"
+)EOF";
+
+  srdsUpdateWithYaml({eager_resource, lazy_resource}, "1");
+  EXPECT_EQ(1UL,
+            server_factory_context_.store_.counter("foo.scoped_rds.foo_scoped_routes.config_reload")
+                .value());
+  EXPECT_EQ(2UL, all_scopes_.value());
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+
+  // Verify the config is a ScopedConfigImpl instance, both scopes point to "" as RDS hasn't kicked
+  // in yet(NullConfigImpl returned).
+  ASSERT_THAT(getScopedRdsProvider(), Not(IsNull()));
+  ASSERT_THAT(getScopedRdsProvider()->config<ScopedConfigImpl>(), Not(IsNull()));
+  // Push rds update before on demand srds request.
+  pushRdsConfig({"foo_routes"}, "111");
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.example.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes");
+  EXPECT_THAT(getScopedRdsProvider()->config<ScopedConfigImpl>()->getRouteConfig(
+                  scope_key_builder_.get(),
+                  TestRequestHeaderMapImpl{{":authority", "www.test.com"}}, &stream_info),
+              IsNull());
+  ScopeKeyPtr scope_key = getScopedRdsProvider()->config<ScopedConfigImpl>()->computeScopeKey(
+      scope_key_builder_.get(), TestRequestHeaderMapImpl{{":authority", "www.test.com"}},
+      &stream_info);
+  EXPECT_CALL(server_factory_context_.dispatcher_, post(_));
+  EXPECT_CALL(event_dispatcher_, post(_));
+  std::function<void(bool)> route_config_updated_cb = [](bool route_exist) {
+    EXPECT_EQ(true, route_exist);
+  };
+  getScopedRdsProvider()->onDemandRdsUpdate(std::move(scope_key), event_dispatcher_,
+                                            std::move(route_config_updated_cb));
+  EXPECT_EQ(getScopedRdsProvider()
+                ->config<ScopedConfigImpl>()
+                ->getRouteConfig(scope_key_builder_.get(),
+                                 TestRequestHeaderMapImpl{{":authority", "www.test.com"}},
+                                 &stream_info)
+                ->name(),
+            "foo_routes");
+}
+#endif
 
 } // namespace
 } // namespace Router

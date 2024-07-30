@@ -33,6 +33,10 @@
 
 #include "absl/types/optional.h"
 
+#if defined(ALIMESH)
+#include "contrib/envoy/http/active_redirect_policy.h"
+#endif
+
 namespace Envoy {
 
 namespace Upstream {
@@ -1098,6 +1102,9 @@ public:
    */
   virtual const std::string& routeName() const PURE;
 
+#if defined(ALIMESH)
+  virtual const InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const PURE;
+#endif
   /**
    * @return RouteStatsContextOptRef the config needed to generate route level stats.
    */

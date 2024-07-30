@@ -103,9 +103,16 @@ TEST_P(WasmCommonTest, WasmFailState) {
   envoy::extensions::wasm::v3::PluginConfig plugin_config;
   auto plugin = std::make_shared<Extensions::Common::Wasm::Plugin>(
       plugin_config, envoy::config::core::v3::TrafficDirection::UNSPECIFIED, local_info, nullptr);
-
+#ifdef ALIMESH
+  // auto wasm = std::make_shared<WasmHandle>(
+  //     std::make_unique<Wasm>(plugin->wasmConfig(), "", scope, *api, cluster_manager, *dispatcher),
+  //     *dispatcher);
   auto wasm = std::make_shared<WasmHandle>(
       std::make_unique<Wasm>(plugin->wasmConfig(), "", scope, *api, cluster_manager, *dispatcher));
+#else
+  auto wasm = std::make_shared<WasmHandle>(
+      std::make_unique<Wasm>(plugin->wasmConfig(), "", scope, *api, cluster_manager, *dispatcher));
+#endif
   auto wasm_base = std::dynamic_pointer_cast<proxy_wasm::WasmHandleBase>(wasm);
   wasm->wasm()->setFailStateForTesting(proxy_wasm::FailState::UnableToCreateVm);
   EXPECT_EQ(toWasmEvent(wasm_base), WasmEvent::UnableToCreateVm);
@@ -196,7 +203,13 @@ TEST_P(WasmCommonTest, Logging) {
       [](Wasm*, const std::shared_ptr<Plugin>&) -> ContextBase* { return nullptr; });
   EXPECT_EQ(std::unique_ptr<ContextBase>(wasm->createContext(plugin)), nullptr);
   auto wasm_weak = std::weak_ptr<Extensions::Common::Wasm::Wasm>(wasm);
+#ifdef ALIMESH
+  // auto wasm_handle =
+  //     std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm), *dispatcher);
   auto wasm_handle = std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm));
+#else
+  auto wasm_handle = std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm));
+#endif
   EXPECT_TRUE(wasm_weak.lock()->load(code, false));
   EXPECT_TRUE(wasm_weak.lock()->initialize());
   auto thread_local_wasm = std::make_shared<Wasm>(wasm_handle, *dispatcher);
@@ -704,7 +717,12 @@ TEST_P(WasmCommonTest, VmCache) {
               EXPECT_CALL(*root_context, log_(spdlog::level::info, Eq("on_delete logging")));
               return root_context;
             });
+#ifdef ALIMESH
+        // return std::make_shared<WasmHandle>(wasm, *dispatcher);
         return std::make_shared<WasmHandle>(wasm);
+#else
+        return std::make_shared<WasmHandle>(wasm);
+#endif
       },
       [](const WasmHandleBaseSharedPtr& wasm_handle,
          const PluginBaseSharedPtr& plugin) -> PluginHandleBaseSharedPtr {
@@ -821,7 +839,12 @@ TEST_P(WasmCommonTest, RemoteCode) {
               EXPECT_CALL(*root_context, log_(spdlog::level::info, Eq("on_delete logging")));
               return root_context;
             });
+#ifdef ALIMESH
         return std::make_shared<WasmHandle>(wasm);
+        // return std::make_shared<WasmHandle>(wasm, *dispatcher);
+#else
+        return std::make_shared<WasmHandle>(wasm);
+#endif
       },
       [](const WasmHandleBaseSharedPtr& wasm_handle,
          const PluginBaseSharedPtr& plugin) -> PluginHandleBaseSharedPtr {
@@ -942,7 +965,12 @@ TEST_P(WasmCommonTest, RemoteCodeMultipleRetry) {
               EXPECT_CALL(*root_context, log_(spdlog::level::info, Eq("on_delete logging")));
               return root_context;
             });
+#ifdef ALIMESH
         return std::make_shared<WasmHandle>(wasm);
+        // return std::make_shared<WasmHandle>(wasm, *dispatcher);
+#else
+        return std::make_shared<WasmHandle>(wasm);
+#endif
       },
       [](const WasmHandleBaseSharedPtr& wasm_handle,
          const PluginBaseSharedPtr& plugin) -> PluginHandleBaseSharedPtr {
@@ -1273,7 +1301,13 @@ TEST_P(WasmCommonTest, ThreadLocalCopyRetainsEnforcement) {
   EXPECT_TRUE(wasm->load(code, false));
   EXPECT_TRUE(wasm->initialize());
 
+#ifdef ALIMESH
+  // auto wasm_handle =
+  //     std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm), *dispatcher);
   auto wasm_handle = std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm));
+#else
+  auto wasm_handle = std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm));
+#endif
   auto thread_local_wasm = std::make_shared<Wasm>(wasm_handle, *dispatcher);
 
   EXPECT_NE(thread_local_wasm, nullptr);

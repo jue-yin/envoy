@@ -525,7 +525,13 @@ RouteEntryImplBase::RouteEntryImplBase(const CommonVirtualHostSharedPtr& vhost,
           vhost_->globalRouteConfig().maxDirectResponseBodySizeBytes())),
       per_filter_configs_(route.typed_per_filter_config(), optional_http_filters, factory_context,
                           validator),
+#if !defined(ALIMESH)
       route_name_(route.name()), time_source_(factory_context.mainThreadDispatcher().timeSource()),
+#else
+      route_name_(route.name()), time_source_(factory_context.mainThreadDispatcher().timeSource()),
+      internal_active_redirect_policy_(
+          buildActiveInternalRedirectPolicy(route.route(), validator, route.name())),
+#endif
       retry_shadow_buffer_limit_(PROTOBUF_GET_WRAPPED_OR_DEFAULT(
           route, per_request_buffer_limit_bytes, vhost->retryShadowBufferLimit())),
       direct_response_code_(ConfigUtility::parseDirectResponseCode(route)),
@@ -599,6 +605,17 @@ RouteEntryImplBase::RouteEntryImplBase(const CommonVirtualHostSharedPtr& vhost,
 
     weighted_clusters_config_ = std::make_unique<WeightedClustersConfig>(
         weighted_clusters, total_weight, route.route().weighted_clusters().header_name());
+
+#if defined(ALIMESH)
+    if (route.route().weighted_clusters().has_inline_cluster_specifier_plugin()) {
+      cluster_specifier_plugin_ = getClusterSpecifierPluginByTheProto(
+          route.route().weighted_clusters().inline_cluster_specifier_plugin(), validator,
+          factory_context);
+    } else if (!route.route().weighted_clusters().cluster_specifier_plugin().empty()) {
+      cluster_specifier_plugin_ = vhost_->globalRouteConfig().clusterSpecifierPlugin(
+          route.route().weighted_clusters().cluster_specifier_plugin());
+    }
+#endif
 
   } else if (route.route().cluster_specifier_case() ==
              envoy::config::route::v3::RouteAction::ClusterSpecifierCase::
@@ -701,11 +718,19 @@ RouteEntryImplBase::RouteEntryImplBase(const CommonVirtualHostSharedPtr& vhost,
               "not be stripped: {}",
               redirect_config_->path_redirect_);
   }
+  ENVOY_LOG(info, "route stats is {}, name is {}", route.stat_prefix(), route.name());
   if (!route.stat_prefix().empty()) {
     route_stats_context_ = std::make_unique<RouteStatsContextImpl>(
         factory_context.scope(), factory_context.routerContext().routeStatNames(),
         vhost->statName(), route.stat_prefix());
+  } else if (!route.name().empty()) {
+    // Added by Ingress
+    // use route_name as default stat_prefix
+    route_stats_context_ = std::make_unique<RouteStatsContextImpl>(
+        factory_context.scope(), factory_context.routerContext().routeStatNames(),
+        vhost->statName(), route.name());
   }
+  // End Added
 
   if (route.route().has_early_data_policy()) {
     auto& factory = Envoy::Config::Utility::getAndCheckFactory<EarlyDataPolicyFactory>(
@@ -855,6 +880,16 @@ void RouteEntryImplBase::finalizeRequestHeaders(Http::RequestHeaderMap& headers,
   absl::optional<std::string> container;
   if (!getPathRewrite(headers, container).empty() || regex_rewrite_ != nullptr ||
       path_rewriter_ != nullptr) {
+#if defined(ALIMESH)
+    // We need to store the original path of access log when user enable the suppress_envoy_headers
+    // option.
+    if (!insert_envoy_original_path) {
+      const_cast<StreamInfo::StreamInfo&>(stream_info)
+          .setDynamicMetadata(
+              "mse.data",
+              MessageUtil::keyValueStruct("original_path", std::string(headers.getPathValue())));
+    }
+#endif
     rewritePathHeader(headers, insert_envoy_original_path);
   }
 }
@@ -1111,6 +1146,32 @@ std::unique_ptr<InternalRedirectPolicyImpl> RouteEntryImplBase::buildInternalRed
   return std::make_unique<InternalRedirectPolicyImpl>(policy_config, validator, current_route_name);
 }
 
+#if defined(ALIMESH)
+std::unique_ptr<InternalActiveRedirectPoliciesImpl>
+RouteEntryImplBase::buildActiveInternalRedirectPolicy(
+    const envoy::config::route::v3::RouteAction& route_config,
+    ProtobufMessage::ValidationVisitor& validator, absl::string_view current_route_name) const {
+  if (route_config.has_internal_active_redirect_policy()) {
+    return std::make_unique<InternalActiveRedirectPoliciesImpl>(
+        route_config.internal_active_redirect_policy(), validator, current_route_name);
+  }
+  envoy::config::route::v3::InternalActiveRedirectPolicy policy_config;
+  switch (route_config.internal_redirect_action()) {
+  case envoy::config::route::v3::RouteAction::HANDLE_INTERNAL_REDIRECT:
+    break;
+  case envoy::config::route::v3::RouteAction::PASS_THROUGH_INTERNAL_REDIRECT:
+    FALLTHRU;
+  default:
+    return nullptr;
+  }
+  if (route_config.has_max_internal_redirects()) {
+    *policy_config.mutable_max_internal_redirects() = route_config.max_internal_redirects();
+  }
+  return std::make_unique<InternalActiveRedirectPoliciesImpl>(policy_config, validator,
+                                                              current_route_name);
+}
+#endif
+
 RouteEntryImplBase::OptionalTimeouts RouteEntryImplBase::buildOptionalTimeouts(
     const envoy::config::route::v3::RouteAction& route) const {
   // Calculate how many values are actually set, to initialize `OptionalTimeouts` packed_struct,
@@ -1320,6 +1381,18 @@ RouteConstSharedPtr RouteEntryImplBase::pickWeightedCluster(const Http::HeaderMa
     }
 
     if (selected_value >= begin && selected_value < end) {
+#if defined(ALIMESH)
+      if (cluster_specifier_plugin_ != nullptr) {
+        auto request_header = dynamic_cast<const Http::RequestHeaderMap*>(&headers);
+        if (!cluster->clusterHeaderName().get().empty() &&
+            !headers.get(cluster->clusterHeaderName()).empty()) {
+          auto route = pickClusterViaClusterHeader(cluster->clusterHeaderName(), headers,
+                                                   static_cast<RouteEntryAndRoute*>(cluster.get()));
+          return cluster_specifier_plugin_->route(route, *request_header);
+        }
+        return cluster_specifier_plugin_->route(cluster, *request_header);
+      }
+#endif
       if (!cluster->clusterHeaderName().get().empty() &&
           !headers.get(cluster->clusterHeaderName()).empty()) {
         return pickClusterViaClusterHeader(cluster->clusterHeaderName(), headers,
@@ -1809,10 +1882,40 @@ VirtualHostImpl::VirtualHostImpl(
                                                   validation_clusters));
     }
   }
+
+#if defined(ALIMESH)
+  for (const auto& server_name : virtual_host.allow_server_names()) {
+    auto isWildcardServerName = absl::StartsWith(server_name, "*.");
+    if (absl::StrContains(server_name, '*') && !isWildcardServerName) {
+      throw EnvoyException(
+          fmt::format("partial wildcards are not supported in \"allow_server_names\""));
+    }
+    if (isWildcardServerName) {
+      // Add for the wildcard domain, i.e. ".example.com" for "*.example.com".
+      allow_server_names_.push_back(server_name.substr(1));
+    } else {
+      allow_server_names_.push_back(server_name);
+    }
+  }
+#endif
 }
 
 const std::shared_ptr<const SslRedirectRoute> VirtualHostImpl::SSL_REDIRECT_ROUTE{
     new SslRedirectRoute()};
+
+#if defined(ALIMESH)
+const SslPermanentRedirector SslPermanentRedirectRoute::SSL_PERMANENT_REDIRECTOR;
+const std::shared_ptr<const SslPermanentRedirectRoute>
+    VirtualHostImpl::SSL_PERMANENT_REDIRECT_ROUTE{new SslPermanentRedirectRoute};
+
+const SNIRedirector SNIRedirectRoute::SNI_REDIRECTOR;
+const envoy::config::core::v3::Metadata SNIRedirectRoute::metadata_;
+const Envoy::Config::TypedMetadataImpl<Envoy::Config::TypedMetadataFactory>
+    SNIRedirectRoute::typed_metadata_({});
+
+const std::shared_ptr<const SNIRedirectRoute> VirtualHostImpl::SNI_REDIRECT_ROUTE{
+    new SNIRedirectRoute()};
+#endif
 
 RouteConstSharedPtr VirtualHostImpl::getRouteFromRoutes(
     const RouteCallback& cb, const Http::RequestHeaderMap& headers,
@@ -1866,6 +1969,52 @@ RouteConstSharedPtr VirtualHostImpl::getRouteFromEntries(const RouteCallback& cb
     return nullptr;
   }
 
+#if defined(ALIMESH)
+  // First check for sni redirect.
+  if (allow_server_names_.empty()) {
+    goto SNI_CHECK_PASS;
+  }
+  if (stream_info.downstreamAddressProvider().sslConnection() == nullptr) {
+    ENVOY_LOG(warn, "allow_server_names field is ignored, because it's not a ssl "
+                    "connection.");
+    goto SNI_CHECK_PASS;
+  }
+  {
+    auto server_name = stream_info.downstreamAddressProvider().requestedServerName();
+    auto it = std::find(allow_server_names_.begin(), allow_server_names_.end(), server_name);
+    if (it != allow_server_names_.end()) {
+      goto SNI_CHECK_PASS;
+    } else {
+      // Match on all wildcard domains, i.e. ".example.com" and ".com" for "www.example.com".
+      size_t pos = server_name.find('.', 1);
+      while (pos < server_name.size() - 1 && pos != absl::string_view::npos) {
+        auto wildcard = server_name.substr(pos);
+        auto it = std::find(allow_server_names_.begin(), allow_server_names_.end(), wildcard);
+        if (it != allow_server_names_.end()) {
+          goto SNI_CHECK_PASS;
+        }
+        pos = server_name.find('.', pos + 1);
+      }
+    }
+  }
+  return SNI_REDIRECT_ROUTE;
+
+SNI_CHECK_PASS:
+  // Second check for ssl redirect
+  RouteConstSharedPtr redirect_route = SSL_PERMANENT_REDIRECT_ROUTE;
+  // only return 301 when http method is GET or HEAD
+  if (headers.Method() && (headers.Method()->value() == Http::Headers::get().MethodValues.Get ||
+                           headers.Method()->value() == Http::Headers::get().MethodValues.Head)) {
+    redirect_route = SSL_REDIRECT_ROUTE;
+  }
+  if (ssl_requirements_ == SslRequirements::All && scheme != "https") {
+    return redirect_route;
+  } else if (ssl_requirements_ == SslRequirements::ExternalOnly && scheme != "https" &&
+             !Http::HeaderUtility::isEnvoyInternalRequest(headers)) {
+    return redirect_route;
+  }
+#else
+
   // First check for ssl redirect.
   if (ssl_requirements_ == SslRequirements::All && scheme != "https") {
     return SSL_REDIRECT_ROUTE;
@@ -1873,6 +2022,7 @@ RouteConstSharedPtr VirtualHostImpl::getRouteFromEntries(const RouteCallback& cb
              !Http::HeaderUtility::isEnvoyInternalRequest(headers)) {
     return SSL_REDIRECT_ROUTE;
   }
+#endif
 
   if (matcher_) {
     Http::Matching::HttpMatchingDataImpl data(stream_info);

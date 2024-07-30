@@ -8,6 +8,12 @@
 namespace Envoy {
 namespace Router {
 
+class ScopedConfig;
+class ScopeKeyBuilder;
+
+using ScopedConfigConstSharedPtr = std::shared_ptr<const ScopedConfig>;
+using ScopeKeyBuilderPtr = std::unique_ptr<const ScopeKeyBuilder>;
+
 /**
  * Scope key fragment base class.
  */
@@ -86,12 +92,19 @@ class ScopeKeyBuilder {
 public:
   virtual ~ScopeKeyBuilder() = default;
 
+#if defined(ALIMESH)
+  virtual ScopeKeyPtr computeScopeKey(const Http::HeaderMap& headers,
+                                      const StreamInfo::StreamInfo* info,
+                                      std::function<ScopeKeyPtr()>& recompute) const PURE;
+  virtual ScopeKeyPtr computeScopeKey(const Http::HeaderMap&) const PURE;
+#else
   /**
    * Based on the incoming HTTP request headers, returns the hash value of its scope key.
    * @param headers the request headers to match the scoped routing configuration against.
    * @return unique_ptr of the scope key computed from header.
    */
   virtual ScopeKeyPtr computeScopeKey(const Http::HeaderMap&) const PURE;
+#endif
 };
 
 /**
@@ -100,7 +113,6 @@ public:
 class ScopedConfig : public Envoy::Config::ConfigProvider::Config {
 public:
   ~ScopedConfig() override = default;
-
   /**
    * Based on the scope key, returns the configuration to use for selecting a target route.
    * The scope key can be got via ScopeKeyBuilder.
@@ -109,10 +121,17 @@ public:
    * @return ConfigConstSharedPtr the router's Config matching the request headers.
    */
   virtual ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr& scope_key) const PURE;
-};
 
-using ScopedConfigConstSharedPtr = std::shared_ptr<const ScopedConfig>;
-using ScopeKeyBuilderPtr = std::unique_ptr<const ScopeKeyBuilder>;
+#if defined(ALIMESH)
+  virtual ConfigConstSharedPtr
+  getRouteConfig(const ScopeKeyBuilder* builder, const Http::HeaderMap& headers,
+                 const StreamInfo::StreamInfo* info = nullptr) const PURE;
+  virtual ScopeKeyPtr computeScopeKey(const ScopeKeyBuilder*, const Http::HeaderMap&,
+                                      const StreamInfo::StreamInfo* = nullptr) const {
+    return {};
+  };
+#endif
+};
 
 } // namespace Router
 } // namespace Envoy

@@ -750,8 +750,12 @@ void ConnectionManagerImpl::RdsRouteConfigUpdateRequester::requestRouteConfigUpd
     const auto& host_header = absl::AsciiStrToLower(parent_.request_headers_->getHostValue());
     requestVhdsUpdate(host_header, thread_local_dispatcher, std::move(route_config_updated_cb));
     return;
-  } else if (scope_key_builder_.has_value()) {
+#if defined(ALIMESH)
+    Router::ScopeKeyPtr scope_key = parent_.snapped_scoped_routes_config_->computeScopeKey(
+        scope_key_builder_.ptr(), *parent_.request_headers_, &parent_.connection()->streamInfo());
+#else
     Router::ScopeKeyPtr scope_key = scope_key_builder_->computeScopeKey(*parent_.request_headers_);
+#endif
     // If scope_key is not null, the scope exists but RouteConfiguration is not initialized.
     if (scope_key != nullptr) {
       requestSrdsUpdate(std::move(scope_key), thread_local_dispatcher,
@@ -998,6 +1002,16 @@ void ConnectionManagerImpl::ActiveStream::onStreamMaxDurationReached() {
 
 void ConnectionManagerImpl::ActiveStream::chargeStats(const ResponseHeaderMap& headers) {
   uint64_t response_code = Utility::getResponseStatus(headers);
+
+#if defined(ALIMESH)
+  if (Grpc::Common::hasGrpcContentType(headers)) {
+    absl::optional<Grpc::Status::GrpcStatus> grpc_status = Grpc::Common::getGrpcStatus(headers);
+    if (grpc_status.has_value()) {
+      response_code = Grpc::Utility::grpcToHttpStatus(grpc_status.value());
+    }
+  }
+#endif
+
   filter_manager_.streamInfo().response_code_ = response_code;
 
   if (filter_manager_.streamInfo().health_check_request_) {
@@ -1502,11 +1516,18 @@ void ConnectionManagerImpl::startDrainSequence() {
 }
 
 void ConnectionManagerImpl::ActiveStream::snapScopedRouteConfig() {
+#if defined(ALIMESH)
+  snapped_route_config_ = snapped_scoped_routes_config_->getRouteConfig(
+      connection_manager_.config_.scopeKeyBuilder().ptr(), *request_headers_,
+      &connection()->streamInfo());
+#else
   // NOTE: if a RDS subscription hasn't got a RouteConfiguration back, a Router::NullConfigImpl is
   // returned, in that case we let it pass.
   auto scope_key =
       connection_manager_.config_.scopeKeyBuilder()->computeScopeKey(*request_headers_);
   snapped_route_config_ = snapped_scoped_routes_config_->getRouteConfig(scope_key);
+#endif
+
   if (snapped_route_config_ == nullptr) {
     ENVOY_STREAM_LOG(trace, "can't find SRDS scope.", *this);
     // TODO(stevenzzzz): Consider to pass an error message to router filter, so that it can
@@ -1775,6 +1796,21 @@ void ConnectionManagerImpl::ActiveStream::encodeHeaders(ResponseHeaderMap& heade
     blockRouteCache();
   }
 
+#if defined(ALIMESH)
+  if (!state_.is_tunneling_ && connection_manager_.codec_->protocol() < Protocol::Http2) {
+    if (connection_manager_.drain_state_ != DrainState::NotDraining) {
+      // If the connection manager is draining send "Connection: Close" on HTTP/1.1 connections.
+      // Do not do this for H2 (which drains via GOAWAY) or Upgrade or CONNECT (as the
+      // payload is no longer HTTP/1.1)
+      headers.setReferenceConnection(Headers::get().ConnectionValues.Close);
+    } else if (connection_manager_.config_.keepaliveHeaderTimeout().count() != 0) {
+      headers.setKeepAlive(absl::StrCat(
+          "timeout=",
+          std::to_string(connection_manager_.config_.keepaliveHeaderTimeout().count())));
+      headers.setReferenceConnection(Headers::get().ConnectionValues.KeepAlive);
+    }
+  }
+#else
   if (connection_manager_.drain_state_ != DrainState::NotDraining &&
       connection_manager_.codec_->protocol() < Protocol::Http2) {
     // If the connection manager is draining send "Connection: Close" on HTTP/1.1 connections.
@@ -1784,6 +1820,7 @@ void ConnectionManagerImpl::ActiveStream::encodeHeaders(ResponseHeaderMap& heade
       headers.setReferenceConnection(Headers::get().ConnectionValues.Close);
     }
   }
+#endif
 
   if (connection_manager_tracing_config_.has_value()) {
     if (connection_manager_tracing_config_->operation_name_ == Tracing::OperationName::Ingress) {
@@ -2116,17 +2153,42 @@ void ConnectionManagerImpl::ActiveStream::onRequestDataTooLarge() {
   connection_manager_.stats_.named_.downstream_rq_too_large_.inc();
 }
 
+#if defined(ALIMESH)
 void ConnectionManagerImpl::ActiveStream::recreateStream(
     StreamInfo::FilterStateSharedPtr filter_state) {
+  return recreateStream(filter_state, false);
+}
+void ConnectionManagerImpl::ActiveStream::recreateStream(
+    StreamInfo::FilterStateSharedPtr filter_state, bool use_original_request_body) {
+#else
+void ConnectionManagerImpl::ActiveStream::recreateStream(
+    StreamInfo::FilterStateSharedPtr filter_state) {
+#endif
   ResponseEncoder* response_encoder = response_encoder_;
   response_encoder_ = nullptr;
 
   Buffer::InstancePtr request_data = std::make_unique<Buffer::OwnedImpl>();
+#if defined(ALIMESH)
+  bool proxy_body = false;
+  const auto& original_buffered_request_data = filter_manager_.originalBufferedRequestData();
+  if (use_original_request_body && original_buffered_request_data != nullptr &&
+      original_buffered_request_data->length() > 0) {
+    proxy_body = true;
+    request_data->move(*original_buffered_request_data);
+  } else {
+    const auto& buffered_request_data = filter_manager_.bufferedRequestData();
+    proxy_body = buffered_request_data != nullptr && buffered_request_data->length() > 0;
+    if (proxy_body) {
+      request_data->move(*buffered_request_data);
+    }
+  }
+#else
   const auto& buffered_request_data = filter_manager_.bufferedRequestData();
   const bool proxy_body = buffered_request_data != nullptr && buffered_request_data->length() > 0;
   if (proxy_body) {
     request_data->move(*buffered_request_data);
   }
+#endif
 
   response_encoder->getStream().removeCallbacks(*this);
 

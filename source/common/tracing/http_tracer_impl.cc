@@ -218,6 +218,14 @@ void HttpTracerUtility::setCommonTags(Span& span, const StreamInfo::StreamInfo& 
 
   span.setTag(Tracing::Tags::get().Component, Tracing::Tags::get().Proxy);
 
+#ifdef ALIMESH
+  // Wasm filter state
+  const auto& custom_span_tags = stream_info.getCustomSpanTagMap();
+  for (const auto& it: custom_span_tags) {
+    span.setTag(it.first, it.second);
+  }
+#endif
+
   // Cluster info.
   if (auto cluster_info = stream_info.upstreamClusterInfo();
       cluster_info.has_value() && cluster_info.value() != nullptr) {

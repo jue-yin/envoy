@@ -50,7 +50,14 @@ message RedirectPolicy {
     // - `prefix_rewrite`
     // - `regex_rewrite`
     config.route.v3.RedirectAction redirect_action = 2;
+
+    google.protobuf.BoolValue use_original_request_uri = 107;
   }
+
+  google.protobuf.UInt32Value max_internal_redirects = 108;
+  google.protobuf.BoolValue keep_original_response_code = 109;
+  google.protobuf.BoolValue use_original_request_body = 110;
+  google.protobuf.BoolValue only_redirect_upstream_code = 111;
 
   // The new response status code if specified. This is used to override the
   // status code of the response from the new upstream if it is not an error status.

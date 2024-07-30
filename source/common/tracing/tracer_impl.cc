@@ -156,6 +156,16 @@ SpanPtr TracerImpl::startSpan(const Config& config, TraceContext& trace_context,
   if (active_span) {
     active_span->setTag(Tracing::Tags::get().NodeId, local_info_.nodeName());
     active_span->setTag(Tracing::Tags::get().Zone, local_info_.zoneName());
+#if defined(ALIMESH)
+    const std::string& remote_address =
+        stream_info.downstreamAddressProvider().localAddress()->ip()->addressAsString();
+    if (stream_info.downstreamAddressProvider().localAddress()->ip()->version() ==
+        Network::Address::IpVersion::v6) {
+      active_span->setTag(Tracing::Tags::get().PeerIpv6, remote_address);
+    } else {
+      active_span->setTag(Tracing::Tags::get().PeerIpv4, remote_address);
+    }
+#endif
   }
 
   return active_span;

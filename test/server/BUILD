@@ -9,7 +9,7 @@ load(
     "envoy_select_admin_functionality",
     "envoy_select_hot_restart",
 )
-load("//bazel:repositories.bzl", "PPC_SKIP_TARGETS", "WINDOWS_SKIP_TARGETS")
+load("//bazel:repositories.bzl", "DARWIN_SKIP_TARGETS", "PPC_SKIP_TARGETS", "WINDOWS_SKIP_TARGETS")
 load("//source/extensions:all_extensions.bzl", "envoy_all_extensions")
 
 licenses(["notice"])  # Apache 2
@@ -272,6 +272,7 @@ envoy_cc_fuzz_test(
     ] + select({
         "//bazel:windows_x86_64": envoy_all_extensions(WINDOWS_SKIP_TARGETS),
         "//bazel:linux_ppc": envoy_all_extensions(PPC_SKIP_TARGETS),
+        "//bazel:darwin": envoy_all_extensions(DARWIN_SKIP_TARGETS),
         "//bazel:gcc_build": [],
         "//conditions:default": envoy_all_extensions(),
     }),

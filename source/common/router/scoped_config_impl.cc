@@ -5,8 +5,191 @@
 
 #include "source/common/protobuf/utility.h"
 
+#if defined(ALIMESH)
+#include "source/common/http/header_utility.h"
+#endif
+
 namespace Envoy {
 namespace Router {
+
+#if defined(ALIMESH)
+namespace {
+
+std::string maskFirstDNSLabel(absl::string_view host) {
+  if (host == "*") {
+    return std::string(host);
+  }
+  if (host.size() < 2) {
+    return "*";
+  }
+  size_t start_pos = (host[0] == '*' && host[1] == '.') ? 2 : 0;
+  size_t dot_pos = host.find('.', start_pos);
+  if (dot_pos != absl::string_view::npos) {
+    return absl::StrCat("*", host.substr(dot_pos));
+  }
+  return "*";
+}
+
+} // namespace
+
+LocalPortValueExtractorImpl::LocalPortValueExtractorImpl(
+    ScopedRoutes::ScopeKeyBuilder::FragmentBuilder&& config)
+    : FragmentBuilderBase(std::move(config)) {
+  ASSERT(config_.type_case() ==
+             ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::kLocalPortValueExtractor,
+         "local_port_value_extractor is not set.");
+}
+
+std::unique_ptr<ScopeKeyFragmentBase> LocalPortValueExtractorImpl::computeFragment(
+    const Http::HeaderMap&, const StreamInfo::StreamInfo* info, ReComputeCbPtr&) const {
+  ASSERT(info != nullptr, "streamInfo is nullptr.");
+  auto port = info->downstreamAddressProvider().localAddress()->ip()->port();
+  return std::make_unique<StringKeyFragment>(std::to_string(long(port)));
+}
+
+HostValueExtractorImpl::HostValueExtractorImpl(
+    ScopedRoutes::ScopeKeyBuilder::FragmentBuilder&& config)
+    : FragmentBuilderBase(std::move(config)),
+      host_value_extractor_config_(config_.host_value_extractor()),
+      max_recompute_num_(PROTOBUF_GET_WRAPPED_OR_DEFAULT(
+          host_value_extractor_config_, max_recompute_num, DefaultMaxRecomputeNum)) {
+  ASSERT(config_.type_case() == ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::kHostValueExtractor,
+         "host_value_extractor is not set.");
+}
+
+std::unique_ptr<ScopeKeyFragmentBase>
+HostValueExtractorImpl::reComputeHelper(const std::string& host,
+                                        ReComputeCbWeakPtr& weak_next_recompute,
+                                        uint32_t recompute_seq) const {
+  if (recompute_seq == max_recompute_num_) {
+    ENVOY_LOG_MISC(warn,
+                   "recompute host fragment failed, maximum number of recalculations exceeded");
+    return nullptr;
+  }
+  auto next_recompute = weak_next_recompute.lock();
+  if (!next_recompute) {
+    return nullptr;
+  }
+  if (host == "*") {
+    *next_recompute = nullptr;
+    return nullptr;
+  }
+  auto masked_host = maskFirstDNSLabel(host);
+  *next_recompute = [this, masked_host, recompute_seq,
+                     weak_next_recompute]() mutable -> std::unique_ptr<ScopeKeyFragmentBase> {
+    return reComputeHelper(masked_host, weak_next_recompute, recompute_seq + 1);
+  };
+  return std::make_unique<StringKeyFragment>(masked_host);
+}
+
+std::unique_ptr<ScopeKeyFragmentBase>
+HostValueExtractorImpl::computeFragment(const Http::HeaderMap& headers,
+                                        const StreamInfo::StreamInfo*,
+                                        ReComputeCbPtr& recompute) const {
+  auto host = static_cast<const Http::RequestHeaderMap&>(headers).getHostValue();
+  auto port_start = Http::HeaderUtility::getPortStart(host);
+  if (port_start != absl::string_view::npos) {
+    host = host.substr(0, port_start);
+  }
+  *recompute = [this, host, weak_recompute = ReComputeCbWeakPtr(recompute)]() mutable
+      -> std::unique_ptr<ScopeKeyFragmentBase> {
+    return reComputeHelper(std::string(host), weak_recompute, 0);
+  };
+  return std::make_unique<StringKeyFragment>(host);
+}
+
+std::unique_ptr<ScopeKeyFragmentBase>
+HeaderValueExtractorImpl::computeFragment(const Http::HeaderMap& headers,
+                                          const StreamInfo::StreamInfo*, ReComputeCbPtr&) const {
+  return computeFragment(headers);
+}
+
+ScopeKeyPtr ScopeKeyBuilderImpl::computeScopeKey(const Http::HeaderMap& headers,
+                                                 const StreamInfo::StreamInfo* info,
+                                                 std::function<ScopeKeyPtr()>& recompute) const {
+  ScopeKey key;
+  bool recomputeable = false;
+  auto recompute_cbs = std::make_shared<std::vector<ReComputeCbPtr>>();
+  for (const auto& builder : fragment_builders_) {
+    // returns nullopt if a null fragment is found.
+    ReComputeCbPtr recompute_fragment_cb = std::make_shared<ReComputeCb>();
+    std::unique_ptr<ScopeKeyFragmentBase> fragment =
+        builder->computeFragment(headers, info, recompute_fragment_cb);
+    if (fragment == nullptr) {
+      return nullptr;
+    }
+    if (*recompute_fragment_cb == nullptr) {
+      auto key_fragment = static_cast<StringKeyFragment*>(fragment.get());
+      auto copied_fragment = std::make_shared<StringKeyFragment>(*key_fragment);
+      auto recompute_cb =
+          std::make_shared<ReComputeCb>([copied_fragment]() -> std::unique_ptr<StringKeyFragment> {
+            return std::make_unique<StringKeyFragment>(*copied_fragment);
+          });
+      recompute_cbs->push_back(recompute_cb);
+    } else {
+      recomputeable = true;
+      recompute_cbs->push_back(recompute_fragment_cb);
+    }
+    key.addFragment(std::move(fragment));
+  }
+  if (recomputeable) {
+    recompute = [&recompute, recompute_cbs]() mutable -> ScopeKeyPtr {
+      ScopeKey new_key;
+      for (auto& cb : *recompute_cbs) {
+        auto new_fragment = (*cb)();
+        if (new_fragment == nullptr) {
+          return nullptr;
+        }
+        if (*cb == nullptr) {
+          recompute = nullptr;
+        }
+        new_key.addFragment(std::move(new_fragment));
+      }
+      return std::make_unique<ScopeKey>(std::move(new_key));
+    };
+  }
+  return std::make_unique<ScopeKey>(std::move(key));
+}
+
+ScopeKeyPtr ScopedConfigImpl::computeScopeKey(const ScopeKeyBuilder* scope_key_builder,
+                                              const Http::HeaderMap& headers,
+                                              const StreamInfo::StreamInfo* info) const {
+  std::function<Router::ScopeKeyPtr()> recompute;
+  ScopeKeyPtr scope_key = scope_key_builder->computeScopeKey(headers, info, recompute);
+  if (scope_key == nullptr) {
+    return nullptr;
+  }
+  decltype(scoped_route_info_by_key_.begin()) iter;
+  do {
+    iter = scoped_route_info_by_key_.find(scope_key->hash());
+    if (iter != scoped_route_info_by_key_.end()) {
+      return scope_key;
+    }
+  } while (recompute != nullptr && (scope_key = recompute()));
+  return nullptr;
+}
+
+Router::ConfigConstSharedPtr
+ScopedConfigImpl::getRouteConfig(const ScopeKeyBuilder* scope_key_builder,
+                                 const Http::HeaderMap& headers,
+                                 const StreamInfo::StreamInfo* info) const {
+  std::function<ScopeKeyPtr()> recompute;
+  ScopeKeyPtr scope_key = scope_key_builder->computeScopeKey(headers, info, recompute);
+  if (scope_key == nullptr) {
+    return nullptr;
+  }
+  decltype(scoped_route_info_by_key_.begin()) iter;
+  do {
+    iter = scoped_route_info_by_key_.find(scope_key->hash());
+    if (iter != scoped_route_info_by_key_.end()) {
+      return iter->second->routeConfig();
+    }
+  } while (recompute != nullptr && (scope_key = recompute()));
+
+  return nullptr;
+}
+
+#endif
 
 bool ScopeKey::operator!=(const ScopeKey& other) const { return !(*this == other); }
 
@@ -98,6 +281,16 @@ ScopeKeyBuilderImpl::ScopeKeyBuilderImpl(ScopedRoutes::ScopeKeyBuilder&& config)
     : ScopeKeyBuilderBase(std::move(config)) {
   for (const auto& fragment_builder : config_.fragments()) {
     switch (fragment_builder.type_case()) {
+#if defined(ALIMESH)
+    case ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::kHostValueExtractor:
+      fragment_builders_.emplace_back(std::make_unique<HostValueExtractorImpl>(
+          ScopedRoutes::ScopeKeyBuilder::FragmentBuilder(fragment_builder)));
+      break;
+    case ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::kLocalPortValueExtractor:
+      fragment_builders_.emplace_back(std::make_unique<LocalPortValueExtractorImpl>(
+          ScopedRoutes::ScopeKeyBuilder::FragmentBuilder(fragment_builder)));
+      break;
+#endif
     case ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::kHeaderValueExtractor:
       fragment_builders_.emplace_back(std::make_unique<HeaderValueExtractorImpl>(
           ScopedRoutes::ScopeKeyBuilder::FragmentBuilder(fragment_builder)));
@@ -112,7 +305,13 @@ ScopeKeyPtr ScopeKeyBuilderImpl::computeScopeKey(const Http::HeaderMap& headers)
   ScopeKey key;
   for (const auto& builder : fragment_builders_) {
     // returns nullopt if a null fragment is found.
+#if defined(ALIMESH)
+    ReComputeCbPtr recompute_fragment_cb = std::make_shared<ReComputeCb>();
+    std::unique_ptr<ScopeKeyFragmentBase> fragment =
+        builder->computeFragment(headers, nullptr, recompute_fragment_cb);
+#else
     std::unique_ptr<ScopeKeyFragmentBase> fragment = builder->computeFragment(headers);
+#endif
     if (fragment == nullptr) {
       return nullptr;
     }

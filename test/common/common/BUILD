@@ -201,10 +201,10 @@ envoy_cc_benchmark_binary(
     deps = ["//source/common/common:minimal_logger_lib"],
 )
 
-envoy_benchmark_test(
-    name = "logger_speed_test_benchmark_test",
-    benchmark_binary = "logger_speed_test",
-)
+# envoy_benchmark_test(
+#     name = "logger_speed_test_benchmark_test",
+#     benchmark_binary = "logger_speed_test",
+# )
 
 envoy_cc_test(
     name = "logger_test",

@@ -63,9 +63,13 @@ bool TestRootContext::onConfigure(size_t size) {
     {
       // Many properties are not available in the root context.
       const std::vector<std::string> properties = {
-          "string_state",     "metadata",   "request",        "response",    "connection",
-          "connection_id",    "upstream",   "source",         "destination", "cluster_name",
-          "cluster_metadata", "route_name", "route_metadata", "upstream_host_metadata",
+          "string_state",     "metadata",
+          "request",          "response",
+          "connection",       "connection_id",
+          "upstream",         "source",
+          "destination",      "cluster_name",
+          "cluster_metadata", "route_name",
+          "route_metadata",   "upstream_host_metadata",
           "filter_state",
       };
       for (const auto& property : properties) {
@@ -274,7 +278,50 @@ FilterHeadersStatus TestContext::onRequestHeaders(uint32_t, bool) {
     }
 
     return FilterHeadersStatus::Continue;
+  } else if (test == "GetRouteName") {
+    std::string value;
+    if (getValue({"route_name"}, &value)) {
+      logInfo("route name is " + value);
+    } else {
+      logError("get route name failed");
+    }
+    return FilterHeadersStatus::Continue;
+  } else if (test == "CrashRecover") {
+    if (!getRequestHeader("crash")->toString().empty()) {
+      abort();
+    }
+  } else if (test == "DisableClearRouteCache") {
+    setFilterState("clear_route_cache", "off");
+    logDebug(std::string("onRequestHeaders ") + std::to_string(id()) + std::string(" ") + test);
+    auto path = getRequestHeader(":path");
+    logInfo(std::string("header path ") + std::string(path->view()));
+    std::string protocol;
+    addRequestHeader("newheader", "newheadervalue");
+    auto server = getRequestHeader("server");
+    replaceRequestHeader("server", "envoy-wasm");
+    auto r = addResponseHeader("bad", "bad");
+    if (r != WasmResult::BadArgument) {
+      logWarn("unexpected success of addResponseHeader");
+    }
+    if (addResponseTrailer("bad", "bad") != WasmResult::BadArgument) {
+      logWarn("unexpected success of addResponseTrailer");
+    }
+    if (removeResponseTrailer("bad") != WasmResult::BadArgument) {
+      logWarn("unexpected success of remoteResponseTrailer");
+    }
+    size_t size;
+    if (getRequestHeaderSize(&size) != WasmResult::Ok) {
+      logWarn("unexpected failure of getRequestHeaderMapSize");
+    }
+    if (getResponseHeaderSize(&size) != WasmResult::BadArgument) {
+      logWarn("unexpected success of getResponseHeaderMapSize");
+    }
+    return FilterHeadersStatus::Continue;
+  } else if (test == "SetDecoderBufferLimit") {
+    auto buffer_size = getRequestHeader("x-buffer-size");
+    setFilterState("set_decoder_buffer_limit", std::string(buffer_size->view()));
   }
+
   return FilterHeadersStatus::Continue;
 }
 
@@ -299,7 +346,15 @@ FilterHeadersStatus TestContext::onResponseHeaders(uint32_t, bool) {
   auto test = root()->test_;
   if (test == "headers") {
     CHECK_RESULT(addResponseHeader("test-status", "OK"));
+  } else if (test == "CrashRecover") {
+    if (!getResponseHeader("crash")->toString().empty()) {
+      abort();
+    }
+  } else if (test == "SetEncoderBufferLimit") {
+    auto buffer_size = getResponseHeader("x-buffer-size");
+    setFilterState("set_encoder_buffer_limit", std::string(buffer_size->view()));
   }
+
   return FilterHeadersStatus::Continue;
 }
 
@@ -340,17 +395,28 @@ FilterDataStatus TestContext::onRequestBody(size_t body_buffer_length, bool end_
     }
     logTrace(std::string("Struct ") + request_string + " " + request_string2);
     return FilterDataStatus::Continue;
+  } else if (test == "CrashRecover") {
+    auto body = getBufferBytes(WasmBufferType::HttpRequestBody, 0, body_buffer_length);
+    if (!body->toString().empty()) {
+      abort();
+    }
   }
   return FilterDataStatus::Continue;
 }
 
-FilterDataStatus TestContext::onResponseBody(size_t, bool end_of_stream) {
+FilterDataStatus TestContext::onResponseBody(size_t body_buffer_length, bool end_of_stream) {
   auto test = root()->test_;
   if (test == "headers") {
     if (end_of_stream) {
       CHECK_RESULT(addResponseTrailer("newtrailer", "response"));
     }
+  } else if (test == "CrashRecover") {
+    auto body = getBufferBytes(WasmBufferType::HttpResponseBody, 0, body_buffer_length);
+    if (!body->toString().empty()) {
+      abort();
+    }
   }
+
   return FilterDataStatus::Continue;
 }
 
@@ -394,7 +460,8 @@ void TestContext::onLog() {
         logWarn("response.code: " + std::to_string(responseCode));
       }
       std::string upstream_host_metadata;
-      if (getValue({"upstream_host_metadata", "filter_metadata", "namespace", "key"}, &upstream_host_metadata)) {
+      if (getValue({"upstream_host_metadata", "filter_metadata", "namespace", "key"},
+                   &upstream_host_metadata)) {
         logWarn("upstream host metadata: " + upstream_host_metadata);
       }
       logWarn("state: " + getProperty({"wasm_state"}).value()->toString());

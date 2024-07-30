@@ -147,6 +147,18 @@ public:
     context_->setEncoderFilterCallbacks(encoder_callbacks_);
   }
 
+#if defined(ALIMESH)
+  template <typename TestFilter> void doRecover() {
+    std::shared_ptr<proxy_wasm::PluginHandleBase> new_handle;
+    if (WasmTestBase<Base>::plugin_handle_->doRecover(new_handle)) {
+      WasmTestBase<Base>::plugin_handle_ = std::static_pointer_cast<PluginHandle>(new_handle);
+      WasmTestBase<Base>::wasm_ = WasmTestBase<Base>::plugin_handle_->wasmHandle();
+      WasmTestBase<Base>::wasm_->wasm()->lifecycleStats().recover_total_.inc();
+      setupFilterBase<TestFilter>();
+    }
+  }
+#endif
+
   std::unique_ptr<Context> context_;
   NiceMock<Http::MockStreamDecoderFilterCallbacks> decoder_callbacks_;
   NiceMock<Http::MockStreamEncoderFilterCallbacks> encoder_callbacks_;

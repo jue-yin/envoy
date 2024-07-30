@@ -549,6 +549,238 @@ void DecoderImpl::parseSlice(const Buffer::RawSlice& slice) {
   }
 }
 
+#if defined(ALIMESH)
+void RawDecoderImpl::decode(Buffer::Instance& data) {
+  for (const Buffer::RawSlice& slice : data.getRawSlices()) {
+    parseSlice(slice);
+  }
+
+  data.drain(data.length());
+}
+
+void RawDecoderImpl::parseSlice(const Buffer::RawSlice& slice) {
+  const char* buffer = reinterpret_cast<const char*>(slice.mem_);
+  uint64_t remaining = slice.len_;
+
+  while (remaining || state_ == State::ValueComplete) {
+    ENVOY_LOG(trace, "parse slice: {} remaining", remaining);
+    switch (state_) {
+    case State::ValueRootStart: {
+      ENVOY_LOG(trace, "parse slice ValueRootStart");
+
+      pending_value_root_.clear();
+      pending_value_stack_.push_front({RespType::Null, "", 0, 0});
+      state_ = State::ValueStart;
+      break;
+    }
+    case State::ValueStart: {
+      ENVOY_LOG(trace, "parse slice: ValueStart: {}", buffer[0]);
+
+      pending_integer_.reset();
+      switch (buffer[0]) {
+      case '*': {
+        state_ = State::IntegerStart;
+        pending_value_stack_.front().type = RespType::Array;
+        break;
+      }
+      case '$': {
+        state_ = State::IntegerStart;
+        pending_value_stack_.front().type = RespType::BulkString;
+        break;
+      }
+      case '-': {
+        state_ = State::SimpleString;
+        pending_value_stack_.front().type = RespType::Error;
+        break;
+      }
+      case '+': {
+        state_ = State::SimpleString;
+        pending_value_stack_.front().type = RespType::SimpleString;
+        break;
+      }
+      case ':': {
+        state_ = State::IntegerStart;
+        pending_value_stack_.front().type = RespType::Integer;
+        break;
+      }
+      default: {
+        throw ProtocolError("invalid value type");
+      }
+      }
+
+      pending_value_stack_.front().value.push_back(buffer[0]);
+      remaining--;
+      buffer++;
+      break;
+    }
+
+    case State::IntegerStart: {
+      ENVOY_LOG(trace, "parse slice: IntegerStart: {}", buffer[0]);
+
+      if (buffer[0] == '-') {
+        pending_integer_.negative_ = true;
+
+        pending_value_stack_.front().value.push_back(buffer[0]);
+        remaining--;
+        buffer++;
+      } else if (buffer[0] == '+') {
+        pending_value_stack_.front().value.push_back(buffer[0]);
+        remaining--;
+        buffer++;
+      }
+
+      state_ = State::Integer;
+      break;
+    }
+    case State::Integer: {
+      ENVOY_LOG(trace, "parse slice: Integer: {}", buffer[0]);
+
+      char c = buffer[0];
+      if (buffer[0] == '\r') {
+        state_ = State::IntegerLF;
+      } else {
+        if (c < '0' || c > '9') {
+          throw ProtocolError("invalid integer character");
+        } else {
+          pending_integer_.integer_ = (pending_integer_.integer_ * 10) + (c - '0');
+        }
+      }
+
+      pending_value_stack_.front().value.push_back(buffer[0]);
+      remaining--;
+      buffer++;
+      break;
+    }
+
+    case State::IntegerLF: {
+      ENVOY_LOG(trace, "parse slice: IntegerLF: {}", buffer[0]);
+
+      if (buffer[0] != '\n') {
+        throw ProtocolError("expect new line");
+      }
+
+      pending_value_stack_.front().value.push_back(buffer[0]);
+      remaining--;
+      buffer++;
+
+      PendingValue& current_value = pending_value_stack_.front();
+      if (current_value.type == RespType::Array) {
+        if (pending_integer_.negative_) {
+          current_value.type = RespType::Null;
+          state_ = State::ValueComplete;
+        } else if (pending_integer_.integer_ == 0) {
+          state_ = State::ValueComplete;
+        } else {
+          current_value.total_array_element = pending_integer_.integer_;
+          pending_value_stack_.push_front({RespType::Null, "", 0, 0});
+          state_ = State::ValueStart;
+        }
+      } else if (current_value.type == RespType::Integer) {
+        // do not calculate real value here, do not care
+        state_ = State::ValueComplete;
+      } else {
+        ASSERT(current_value.type == RespType::BulkString);
+        if (!pending_integer_.negative_) {
+          state_ = State::BulkStringBody;
+        } else {
+          current_value.type = RespType::Null;
+          state_ = State::ValueComplete;
+        }
+      }
+      break;
+    }
+
+    case State::BulkStringBody: {
+      ENVOY_LOG(trace, "parse slice: IntegerLF: {}", buffer[0]);
+
+      ASSERT(!pending_integer_.negative_);
+      uint64_t length_to_copy =
+          std::min(static_cast<uint64_t>(pending_integer_.integer_), remaining);
+      pending_value_stack_.front().value.append(buffer, length_to_copy);
+      pending_integer_.integer_ -= length_to_copy;
+      remaining -= length_to_copy;
+      buffer += length_to_copy;
+
+      if (pending_integer_.integer_ == 0) {
+        state_ = State::CR;
+      }
+      break;
+    }
+
+    case State::CR: {
+      ENVOY_LOG(trace, "parse slice: CR: {}", buffer[0]);
+
+      if (buffer[0] != '\r') {
+        throw ProtocolError("expected carriage return");
+      }
+      pending_value_stack_.front().value.push_back(buffer[0]);
+      remaining--;
+      buffer++;
+
+      state_ = State::LF;
+      break;
+    }
+
+    case State::LF: {
+      ENVOY_LOG(trace, "parse slice: CR: {}", buffer[0]);
+
+      if (buffer[0] != '\n') {
+        throw ProtocolError("expected new line");
+      }
+
+      pending_value_stack_.front().value.push_back(buffer[0]);
+      remaining--;
+      buffer++;
+
+      state_ = State::ValueComplete;
+      break;
+    }
+
+    case State::SimpleString: {
+      ENVOY_LOG(trace, "parse slice: SimpleString: {}", buffer[0]);
+
+      if (buffer[0] == '\r') {
+        state_ = State::LF;
+      }
+      pending_value_stack_.front().value.push_back(buffer[0]);
+      remaining--;
+      buffer++;
+      break;
+    }
+
+    case State::ValueComplete: {
+      ENVOY_LOG(trace, "parse slice: ValueComplete: {}", buffer[0]);
+      ASSERT(!pending_value_stack_.empty());
+
+      PendingValue current_value = pending_value_stack_.front();
+      pending_value_stack_.pop_front();
+
+      if (pending_value_stack_.empty()) {
+        pending_value_root_.append(current_value.value);
+
+        ENVOY_LOG(trace, "calling callbacks on value: {}", pending_value_root_);
+        callbacks_.onRawResponse(std::move(pending_value_root_));
+        state_ = State::ValueRootStart;
+      } else {
+        PendingValue& array_value = pending_value_stack_.front();
+        // only array type node can have children
+        ASSERT(array_value.type == RespType::Array);
+
+        array_value.value.append(current_value.value);
+
+        if (array_value.current_array_element < array_value.total_array_element - 1) {
+          array_value.current_array_element++;
+          pending_value_stack_.push_front({RespType::Null, "", 0, 0});
+          state_ = State::ValueStart;
+        }
+      }
+      break;
+    }
+    }
+  }
+}
+#endif
+
 void EncoderImpl::encode(const RespValue& value, Buffer::Instance& out) {
   switch (value.type()) {
   case RespType::Array: {
@@ -651,6 +883,9 @@ void EncoderImpl::encodeSimpleString(const std::string& string, Buffer::Instance
   out.add(string);
   out.add("\r\n", 2);
 }
+#if defined(ALIMESH)
+void RawEncoderImpl::encode(std::string_view value, Buffer::Instance& out) { out.add(value); }
+#endif
 
 } // namespace Redis
 } // namespace Common

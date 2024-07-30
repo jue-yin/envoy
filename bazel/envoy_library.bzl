@@ -103,6 +103,7 @@ def envoy_cc_library(
         tags = [],
         deps = [],
         strip_include_prefix = None,
+        alimesh_deps = [],
         include_prefix = None,
         textual_hdrs = None,
         alwayslink = None,
@@ -110,6 +111,11 @@ def envoy_cc_library(
         linkopts = []):
     if tcmalloc_dep:
         deps += tcmalloc_external_deps(repository)
+
+    deps = deps + select({
+        "@envoy//bazel:alimesh": [],
+        "//conditions:default": alimesh_deps,
+    })
 
     # If alwayslink is not specified, allow turning it off via --define=library_autolink=disabled
     # alwayslink is defaulted on for envoy_cc_extensions to ensure the REGISTRY macros work.

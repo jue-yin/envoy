@@ -10,35 +10,37 @@ namespace Dubbo {
 RpcRequestImpl::Attachment::Attachment(MapPtr&& value, size_t offset)
     : attachment_(std::move(value)), attachment_offset_(offset) {
   ASSERT(attachment_ != nullptr);
-  ASSERT(attachment_->toMutableUntypedMap().has_value());
+  ASSERT(attachment_->toMutableUntypedMap());
 }
 
 void RpcRequestImpl::Attachment::insert(absl::string_view key, absl::string_view value) {
-  ASSERT(attachment_->toMutableUntypedMap().has_value());
+  ASSERT(attachment_->toMutableUntypedMap());
 
   attachment_updated_ = true;
 
   Hessian2::ObjectPtr key_o = std::make_unique<String>(key);
   Hessian2::ObjectPtr val_o = std::make_unique<String>(value);
-  attachment_->toMutableUntypedMap().value().get().insert_or_assign(std::move(key_o),
-                                                                    std::move(val_o));
+  auto map = attachment_->toMutableUntypedMap();
+  map->insert_or_assign(std::move(key_o), std::move(val_o));
 }
 
 void RpcRequestImpl::Attachment::remove(absl::string_view key) {
-  ASSERT(attachment_->toMutableUntypedMap().has_value());
+  ASSERT(attachment_->toMutableUntypedMap());
 
   attachment_updated_ = true;
-  attachment_->toMutableUntypedMap().value().get().erase(key);
+
+  auto map = attachment_->toMutableUntypedMap();
+  map->erase(std::make_unique<String>(key));
 }
 
 absl::optional<absl::string_view> RpcRequestImpl::Attachment::lookup(absl::string_view key) const {
-  ASSERT(attachment_->toMutableUntypedMap().has_value());
+  ASSERT(attachment_->toMutableUntypedMap());
 
-  auto& map = attachment_->toMutableUntypedMap().value().get();
-  auto result = map.find(key);
-  if (result != map.end() && result->second->type() == Hessian2::Object::Type::String) {
+  auto map = attachment_->toMutableUntypedMap();
+  auto result = map->find(std::make_unique<String>(key));
+  if (result != map->end() && result->second->type() == Hessian2::Object::Type::String) {
     ASSERT(result->second->toString().has_value());
-    return absl::make_optional<absl::string_view>(result->second->toString().value().get());
+    return absl::make_optional<absl::string_view>(*(result->second->toString().value()));
   }
   return absl::nullopt;
 }

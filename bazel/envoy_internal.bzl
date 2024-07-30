@@ -126,6 +126,7 @@ def envoy_copts(repository, test = False):
            _envoy_select_perf_annotation(["-DENVOY_PERF_ANNOTATION"]) + \
            _envoy_select_perfetto(["-DENVOY_PERFETTO"]) + \
            envoy_select_google_grpc(["-DENVOY_GOOGLE_GRPC"], repository) + \
+           envoy_select_alimesh(["-DALIMESH"]) + \
            envoy_select_signal_trace(["-DENVOY_HANDLE_SIGNALS"], repository) + \
            _envoy_select_path_normalization_by_default(["-DENVOY_NORMALIZE_PATH_BY_DEFAULT"], repository)
 
@@ -190,6 +191,12 @@ def _envoy_select_perf_annotation(xs):
     return select({
         "@envoy//bazel:enable_perf_annotation": xs,
         "//conditions:default": [],
+    })
+
+def envoy_select_alimesh(xs):
+    return select({
+        "@envoy//bazel:alimesh": [],
+        "//conditions:default": xs,
     })
 
 def _envoy_select_perfetto(xs):

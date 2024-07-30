@@ -2,6 +2,10 @@
 
 #include <string>
 
+#if defined(ALIMESH)
+#include "source/common/common/base64.h"
+#endif
+
 namespace Envoy {
 namespace Extensions {
 namespace Tracers {
@@ -15,6 +19,12 @@ static constexpr absl::string_view UrlTag = "url";
 const Http::LowerCaseString& skywalkingPropagationHeaderKey() {
   CONSTRUCT_ON_FIRST_USE(Http::LowerCaseString, "sw8");
 }
+
+#if defined(ALIMESH)
+const Http::LowerCaseString& skywalkingPropagationHeaderKeyTraceId() {
+  CONSTRUCT_ON_FIRST_USE(Http::LowerCaseString, "sw8-traceid");
+}
+#endif
 
 void Span::setTag(absl::string_view name, absl::string_view value) {
   if (name == Tracing::Tags::get().HttpUrl) {
@@ -55,7 +65,14 @@ void Span::injectContext(Tracing::TraceContext& trace_context,
       tracing_context_->createSW8HeaderValue({remote_address.data(), remote_address.size()});
   if (sw8_header.has_value()) {
     trace_context.setByReferenceKey(skywalkingPropagationHeaderKey(), sw8_header.value());
-
+#if defined(ALIMESH)
+    std::vector<std::string> result = absl::StrSplit(sw8_header.value(), '-');
+    std::string sw8_trace_id = "";
+    if (result.size() > 1) {
+      sw8_trace_id = Base64::decode(result[1]); 
+    }
+    trace_context.setByReferenceKey(skywalkingPropagationHeaderKeyTraceId(), sw8_trace_id);
+#endif
     // Rewrite operation name with latest upstream request path for the EXIT span.
     absl::string_view upstream_request_path = trace_context.path();
     span_entity_->setOperationName({upstream_request_path.data(), upstream_request_path.size()});

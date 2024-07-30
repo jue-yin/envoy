@@ -910,6 +910,19 @@ public:
    * @param failure_reason the downstream transport failure reason.
    */
   virtual void setDownstreamTransportFailureReason(absl::string_view failure_reason) PURE;
+
+#ifdef ALIMESH
+  /**
+   * @param key the filter state key set by wasm filter.
+   * @param value the filter state value set by wasm filter.
+   */
+  virtual void setCustomSpanTag(std::string_view key, std::string_view value) PURE;
+
+  /**
+   * @return the key-value map of filter states set by wasm filter.
+   */
+  virtual const absl::flat_hash_map<std::string, std::string>& getCustomSpanTagMap() const PURE;
+#endif
 };
 
 // An enum representation of the Proxy-Status error space.

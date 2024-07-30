@@ -65,6 +65,17 @@ void DetectorHostMonitorImpl::updateCurrentSuccessRateBucket() {
   local_origin_sr_monitor_.updateCurrentSuccessRateBucket();
 }
 
+#if defined(ALIMESH)
+void DetectorHostMonitorImpl::forceEjectHost() {
+  std::shared_ptr<DetectorImpl> detector = detector_.lock();
+  if (!detector) {
+    // It's possible for the cluster/detector to go away while we still have a host in use.
+    return;
+  }
+  detector->onConsecutive5xx(host_.lock());
+}
+#endif
+
 void DetectorHostMonitorImpl::putHttpResponseCode(uint64_t response_code) {
   external_origin_sr_monitor_.incTotalReqCounter();
   if (Http::CodeUtility::is5xx(response_code)) {

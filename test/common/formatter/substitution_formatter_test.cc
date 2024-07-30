@@ -801,7 +801,7 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
     const std::string observable_cluster_name = "observability_name";
     auto cluster_info_mock = std::make_shared<Upstream::MockClusterInfo>();
     absl::optional<Upstream::ClusterInfoConstSharedPtr> cluster_info = cluster_info_mock;
-    EXPECT_CALL(stream_info, upstreamClusterInfo()).WillRepeatedly(Return(cluster_info));
+    EXPECT_CALL(stream_info, upstreamClusterInfo()).WillRepeatedly(testing::Return(cluster_info));
     EXPECT_CALL(*cluster_info_mock, observabilityName())
         .WillRepeatedly(ReturnRef(observable_cluster_name));
     EXPECT_EQ("observability_name",
@@ -815,7 +815,7 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
   {
     StreamInfoFormatter upstream_format("UPSTREAM_CLUSTER");
     absl::optional<Upstream::ClusterInfoConstSharedPtr> cluster_info = nullptr;
-    EXPECT_CALL(stream_info, upstreamClusterInfo()).WillRepeatedly(Return(cluster_info));
+    EXPECT_CALL(stream_info, upstreamClusterInfo()).WillRepeatedly(testing::Return(cluster_info));
     EXPECT_EQ(absl::nullopt,
               upstream_format.format(request_headers, response_headers, response_trailers,
                                      stream_info, body, AccessLog::AccessLogType::NotSet));
@@ -912,6 +912,8 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
                   ProtoEq(ValueUtil::stringValue("8443")));
     }
 
+// The test environment does not support IPV6
+#if !defined(ALIMESH)
     // Validate for IPv6 address
     address =
         Network::Address::InstanceConstSharedPtr{new Network::Address::Ipv6Instance("::1", 9443)};
@@ -930,6 +932,7 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
                                               stream_info, body, AccessLog::AccessLogType::NotSet),
                   ProtoEq(ValueUtil::stringValue("9443")));
     }
+#endif
 
     // Validate for Pipe
     address = Network::Address::InstanceConstSharedPtr{new Network::Address::PipeInstance("/foo")};

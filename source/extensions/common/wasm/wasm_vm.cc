@@ -9,6 +9,7 @@
 #include "source/extensions/common/wasm/wasm_runtime_factory.h"
 
 #include "include/proxy-wasm/null_plugin.h"
+#include "absl/strings/str_replace.h"
 
 using ContextBase = proxy_wasm::ContextBase;
 using Word = proxy_wasm::Word;
@@ -35,7 +36,13 @@ proxy_wasm::LogLevel EnvoyWasmVmIntegration::getLogLevel() {
   }
 }
 
-void EnvoyWasmVmIntegration::error(std::string_view message) { ENVOY_LOG(error, message); }
+void EnvoyWasmVmIntegration::error(std::string_view message) {
+#ifdef ALIMESH
+  ENVOY_LOG(error, absl::StrReplaceAll(message, {{"\n", "\\n"}}));
+#else
+  ENVOY_LOG(error, message);
+#endif
+}
 void EnvoyWasmVmIntegration::trace(std::string_view message) { ENVOY_LOG(trace, message); }
 
 bool EnvoyWasmVmIntegration::getNullVmFunction(std::string_view function_name, bool returns_word,

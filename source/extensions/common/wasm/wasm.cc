@@ -60,6 +60,34 @@ inline Wasm* getWasm(WasmHandleSharedPtr& base_wasm_handle) {
   return static_cast<Wasm*>(base_wasm_handle->wasm().get());
 }
 
+#ifdef ALIMESH
+WasmEvent failStateToWasmEvent(FailState state) {
+  switch (state) {
+  case FailState::Ok:
+    return WasmEvent::Ok;
+  case FailState::UnableToCreateVm:
+    return WasmEvent::UnableToCreateVm;
+  case FailState::UnableToCloneVm:
+    return WasmEvent::UnableToCloneVm;
+  case FailState::MissingFunction:
+    return WasmEvent::MissingFunction;
+  case FailState::UnableToInitializeCode:
+    return WasmEvent::UnableToInitializeCode;
+  case FailState::StartFailed:
+    return WasmEvent::StartFailed;
+  case FailState::ConfigureFailed:
+    return WasmEvent::ConfigureFailed;
+  case FailState::RuntimeError:
+    return WasmEvent::RuntimeError;
+  case FailState::RecoverError:
+    return WasmEvent::RecoverError;
+  }
+  PANIC("corrupt enum");
+}
+
+const int MIN_RECOVER_INTERVAL_SECONDS = 5;
+#endif
+
 } // namespace
 
 void Wasm::initializeLifecycle(Server::ServerLifecycleNotifier& lifecycle_notifier) {
@@ -82,8 +110,14 @@ Wasm::Wasm(WasmConfig& config, absl::string_view vm_key, const Stats::ScopeShare
       scope_(scope), api_(api), stat_name_pool_(scope_->symbolTable()),
       custom_stat_namespace_(stat_name_pool_.add(CustomStatNamespace)),
       cluster_manager_(cluster_manager), dispatcher_(dispatcher),
-      time_source_(dispatcher.timeSource()), lifecycle_stats_handler_(LifecycleStatsHandler(
-                                                 scope, config.config().vm_config().runtime())) {
+      time_source_(dispatcher.timeSource()),
+#ifdef ALIMESH
+      lifecycle_stats_handler_(LifecycleStatsHandler(scope, config.config().vm_config().runtime(),
+                                                     config.config().name())) {
+#else
+      lifecycle_stats_handler_(
+          LifecycleStatsHandler(scope, config.config().vm_config().runtime()) {
+#endif
   lifecycle_stats_handler_.onEvent(WasmEvent::VmCreated);
   ENVOY_LOG(debug, "Base Wasm created {} now active", lifecycle_stats_handler_.getActiveVmCount());
 }
@@ -102,6 +136,14 @@ Wasm::Wasm(WasmHandleSharedPtr base_wasm_handle, Event::Dispatcher& dispatcher)
       time_source_(dispatcher.timeSource()),
       lifecycle_stats_handler_(getWasm(base_wasm_handle)->lifecycle_stats_handler_) {
   lifecycle_stats_handler_.onEvent(WasmEvent::VmCreated);
+#ifdef ALIMESH
+  auto* vm = wasm_vm();
+  if (vm) {
+    vm->addFailCallback([this](FailState fail_state) {
+      lifecycle_stats_handler_.onEvent(failStateToWasmEvent(fail_state));
+    });
+  }
+#endif
   ENVOY_LOG(debug, "Thread-Local Wasm created {} now active",
             lifecycle_stats_handler_.getActiveVmCount());
 }
@@ -151,6 +193,32 @@ Wasm::~Wasm() {
     dispatcher_.post(std::move(server_shutdown_post_cb_));
   }
 }
+
+#if defined(ALIMESH)
+bool PluginHandleSharedPtrThreadLocal::recover() {
+  if (handle_ == nullptr || handle_->wasmHandle() == nullptr ||
+      handle_->wasmHandle()->wasm() == nullptr) {
+    ENVOY_LOG(warn, "wasm has not been initialized");
+    return false;
+  }
+  auto& dispatcher = handle_->wasmHandle()->wasm()->dispatcher();
+  auto now = dispatcher.timeSource().monotonicTime() + cache_time_offset_for_testing;
+  if (now - last_recover_time_ < std::chrono::seconds(MIN_RECOVER_INTERVAL_SECONDS)) {
+    ENVOY_LOG(debug, "recover interval has not been reached");
+    return false;
+  }
+  // Even if recovery fails, it will be retried after the interval
+  last_recover_time_ = now;
+  std::shared_ptr<PluginHandleBase> new_handle;
+  if (handle_->doRecover(new_handle)) {
+    handle_ = std::static_pointer_cast<PluginHandle>(new_handle);
+    handle_->wasmHandle()->wasm()->lifecycleStats().recover_total_.inc();
+    ENVOY_LOG(info, "wasm vm recover from crash success");
+    return true;
+  }
+  return false;
+}
+#endif
 
 // NOLINTNEXTLINE(readability-identifier-naming)
 Word resolve_dns(Word dns_address_ptr, Word dns_address_size, Word token_ptr) {
@@ -308,6 +376,10 @@ WasmEvent toWasmEvent(const std::shared_ptr<WasmHandleBase>& wasm) {
     return WasmEvent::ConfigureFailed;
   case FailState::RuntimeError:
     return WasmEvent::RuntimeError;
+#if defined(ALIMESH)
+  case FailState::RecoverError:
+    return WasmEvent::RecoverError;
+#endif
   }
   PANIC("corrupt enum");
 }

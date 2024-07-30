@@ -243,6 +243,28 @@ TEST_F(ContextTest, FindValueTest) {
   EXPECT_FALSE(ctx_.FindValue("plugin_name", &arena).has_value());
 }
 
+#ifdef ALIMESH
+TEST_F(ContextTest, SetCustomSpanTagTest) {
+  Http::MockStreamDecoderFilterCallbacks decoder_callbacks;
+  Envoy::StreamInfo::MockStreamInfo decoder_si;
+  EXPECT_CALL(decoder_callbacks, streamInfo())
+      .Times(1)
+      .WillOnce(testing::ReturnRef(decoder_si));
+  ctx_.setDecoderFilterCallbacksPtr(&decoder_callbacks);
+  absl::flat_hash_map<std::string, std::string> map;
+  ON_CALL(decoder_si, setCustomSpanTag(testing::_, testing::_))
+      .WillByDefault([&](absl::string_view key, absl::string_view value) {
+        map[key] = value;
+      });
+  EXPECT_CALL(decoder_si, setCustomSpanTag(testing::_, testing::_))
+      .Times(1);
+  ctx_.setProperty("trace_span_tag.test_key", "test_value");
+  const auto& it = map.find("test_key");
+  EXPECT_TRUE(it != map.end());
+  EXPECT_EQ(it->second, "test_value");
+}
+#endif
+
 } // namespace Wasm
 } // namespace Common
 } // namespace Extensions

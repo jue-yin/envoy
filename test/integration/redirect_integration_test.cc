@@ -225,8 +225,13 @@ TEST_P(RedirectIntegrationTest, BasicInternalRedirectDownstreamBytesCount) {
 
   ASSERT_TRUE(response->waitForEndStream());
   ASSERT_TRUE(response->complete());
+#ifdef ALIMESH
+  expectDownstreamBytesSentAndReceived(BytesCountExpectation(223, 63, 204, 31),
+                                       BytesCountExpectation(136, 42, 136, 42),
+#else
   expectDownstreamBytesSentAndReceived(BytesCountExpectation(140, 63, 121, 31),
                                        BytesCountExpectation(77, 42, 77, 42),
+#endif
                                        BytesCountExpectation(9, 8, 9, 6), 1);
 }
 
@@ -257,12 +262,25 @@ TEST_P(RedirectIntegrationTest, BasicInternalRedirectUpstreamBytesCount) {
   ASSERT_TRUE(response->waitForEndStream());
   ASSERT_TRUE(response->complete());
   BytesCountExpectation http2_expected = (GetParam().http2_implementation == Http2Impl::Oghttp2)
+#ifdef ALIMESH
+                                             ? BytesCountExpectation(189, 59, 189, 59)
+                                             : BytesCountExpectation(189, 64, 189, 64);
+#else
                                              ? BytesCountExpectation(137, 59, 137, 59)
                                              : BytesCountExpectation(137, 64, 137, 64);
+#endif
+
+#ifdef ALIMESH
+  expectUpstreamBytesSentAndReceived(BytesCountExpectation(267, 110, 236, 85), http2_expected,
+                                     BytesCountExpectation(137, 64, 137, 64), 0);
+  expectUpstreamBytesSentAndReceived(BytesCountExpectation(302, 38, 277, 18),
+                                     BytesCountExpectation(96, 10, 96, 10),
+#else
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(195, 110, 164, 85), http2_expected,
                                      BytesCountExpectation(137, 64, 137, 64), 0);
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(244, 38, 219, 18),
                                      BytesCountExpectation(85, 10, 85, 10),
+#endif
                                      BytesCountExpectation(85, 10, 85, 10), 1);
 }
 

@@ -31,12 +31,27 @@ struct CreateWasmStats {
   CREATE_WASM_STATS(GENERATE_COUNTER_STRUCT, GENERATE_GAUGE_STRUCT)
 };
 
+#ifdef ALIMESH
+#define LIFECYCLE_STATS(COUNTER, GAUGE, PLUGIN_COUNTER, PLUGIN_GAUGE)                              \
+  COUNTER(created)                                                                                 \
+  GAUGE(active, NeverImport)                                                                       \
+  PLUGIN_COUNTER(recover_total)                                                                    \
+  PLUGIN_COUNTER(crash_total)                                                                      \
+  PLUGIN_COUNTER(recover_error)                                                                    \
+  PLUGIN_GAUGE(crash, NeverImport)
+#else
 #define LIFECYCLE_STATS(COUNTER, GAUGE)                                                            \
   COUNTER(created)                                                                                 \
   GAUGE(active, NeverImport)
+#endif
 
 struct LifecycleStats {
+#ifdef ALIMESH
+  LIFECYCLE_STATS(GENERATE_COUNTER_STRUCT, GENERATE_GAUGE_STRUCT, GENERATE_COUNTER_STRUCT,
+                  GENERATE_GAUGE_STRUCT)
+#else
   LIFECYCLE_STATS(GENERATE_COUNTER_STRUCT, GENERATE_GAUGE_STRUCT)
+#endif
 };
 
 using ScopeWeakPtr = std::weak_ptr<Stats::Scope>;
@@ -57,6 +72,9 @@ enum class WasmEvent : int {
   RuntimeError,
   VmCreated,
   VmShutDown,
+#ifdef ALIMESH
+  RecoverError,
+#endif
 };
 
 class CreateStatsHandler : Logger::Loggable<Logger::Id::wasm> {
@@ -89,17 +107,36 @@ CreateStatsHandler& getCreateStatsHandler();
 
 class LifecycleStatsHandler {
 public:
+#ifdef ALIMESH
+  LifecycleStatsHandler(const Stats::ScopeSharedPtr& scope, std::string runtime,
+                        std::string plugin_name)
+      : lifecycle_stats_(LifecycleStats{LIFECYCLE_STATS(
+            POOL_COUNTER_PREFIX(*scope, absl::StrCat("wasm.", runtime, ".")),
+            POOL_GAUGE_PREFIX(*scope, absl::StrCat("wasm.", runtime, ".")),
+            POOL_COUNTER_PREFIX(*scope,
+                                absl::StrCat("wasm.", runtime, ".plugin.", plugin_name, ".")),
+            POOL_GAUGE_PREFIX(*scope,
+                              absl::StrCat("wasm.", runtime, ".plugin.", plugin_name, ".")))}){};
+#else
   LifecycleStatsHandler(const Stats::ScopeSharedPtr& scope, std::string runtime)
       : lifecycle_stats_(LifecycleStats{
             LIFECYCLE_STATS(POOL_COUNTER_PREFIX(*scope, absl::StrCat("wasm.", runtime, ".")),
                             POOL_GAUGE_PREFIX(*scope, absl::StrCat("wasm.", runtime, ".")))}){};
+#endif
   ~LifecycleStatsHandler() = default;
 
   void onEvent(WasmEvent event);
   static int64_t getActiveVmCount();
 
+#ifdef ALIMESH
+  LifecycleStats& stats() { return lifecycle_stats_; }
+#endif
+
 protected:
   LifecycleStats lifecycle_stats_;
+#ifdef ALIMESH
+  bool is_crashed_ = false;
+#endif
 };
 
 } // namespace Wasm

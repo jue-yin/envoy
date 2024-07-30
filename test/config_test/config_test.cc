@@ -47,7 +47,11 @@ OptionsImpl asConfigYaml(const OptionsImpl& src, Api::Api& api) {
 
 static std::vector<absl::string_view> unsuported_win32_configs = {
 #if defined(WIN32) && !defined(SO_ORIGINAL_DST)
-    "configs_original-dst-cluster_proxy_config.yaml"
+    "configs_original-dst-cluster_proxy_config.yaml",
+#endif
+#if defined(ALIMESH)
+    // The test platform does not support udp Gro feature.
+    "udp_envoy.yaml"
 #endif
 };
 

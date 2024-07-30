@@ -6,6 +6,11 @@
 
 #include "source/common/router/scoped_config_impl.h"
 
+#if defined(ALIMESH)
+#include "source/common/network/address_impl.h"
+#include "test/mocks/stream_info/mocks.h"
+#endif
+
 #include "test/mocks/router/mocks.h"
 #include "test/test_common/utility.h"
 
@@ -17,6 +22,9 @@ namespace {
 
 using ::Envoy::Http::TestRequestHeaderMapImpl;
 using ::testing::NiceMock;
+#if defined(ALIMESH)
+using ::testing::ReturnPointee;
+#endif
 
 class FooFragment : public ScopeKeyFragmentBase {
 public:
@@ -349,6 +357,68 @@ TEST(ScopeKeyBuilderImplTest, Parse) {
   });
   EXPECT_EQ(key, nullptr);
 }
+
+#if defined(ALIMESH)
+TEST(ScopeKeyBuilderImplTest, ParseHostAndPort) {
+  std::string yaml_plain = R"EOF(
+  fragments:
+  - local_port_value_extractor: {}
+  - host_value_extractor:
+      max_recompute_num: 3
+)EOF";
+
+  ScopedRoutes::ScopeKeyBuilder config;
+  TestUtility::loadFromYaml(yaml_plain, config);
+  ScopeKeyBuilderImpl key_builder(std::move(config));
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+  {
+    std::function<Router::ScopeKeyPtr()> recompute;
+    ScopeKeyPtr key = key_builder.computeScopeKey(
+        TestRequestHeaderMapImpl{
+            {":authority", "www.example.com"},
+        },
+        &stream_info, recompute);
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "www.example.com"}));
+    key = recompute();
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "*.example.com"}));
+    key = recompute();
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "*.com"}));
+    key = recompute();
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "*"}));
+  }
+  {
+    std::function<Router::ScopeKeyPtr()> recompute;
+    ScopeKeyPtr key = key_builder.computeScopeKey(
+        TestRequestHeaderMapImpl{
+            {":authority", "www.test.example.com"},
+        },
+        &stream_info, recompute);
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "www.test.example.com"}));
+    key = recompute();
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "*.test.example.com"}));
+    key = recompute();
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "*.example.com"}));
+    key = recompute();
+    EXPECT_NE(key, nullptr);
+    EXPECT_EQ(*key, makeKey({"80", "*.com"}));
+    key = recompute();
+    EXPECT_EQ(key, nullptr);
+  }
+}
+#endif
 
 class ScopedRouteInfoTest : public testing::Test {
 public:

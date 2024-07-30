@@ -58,7 +58,7 @@ public:
   }
   Http::FilterFactoryCb
   createFilterFactoryFromProto(const Protobuf::Message&, const std::string&,
-                               Server::Configuration::UpstreamHttpFactoryContext&) override {
+                               Server::Configuration::UpstreamFactoryContext&) override {
     created_ = true;
     return [](Http::FilterChainFactoryCallbacks&) -> void {};
   }
@@ -85,7 +85,7 @@ public:
   }
   Network::FilterFactoryCb
   createFilterFactoryFromProto(const Protobuf::Message&,
-                               Server::Configuration::CommonFactoryContext&) override {
+                               Server::Configuration::UpstreamFactoryContext&) override {
     created_ = true;
     return [](Network::FilterManager&) -> void {};
   }
@@ -179,6 +179,7 @@ public:
   DynamicFilterConfigProviderPtr<FactoryCb> createProvider(std::string name, bool warm,
                                                            bool default_configuration,
                                                            bool last_filter_config = true) {
+
     EXPECT_CALL(init_manager_, add(_));
     envoy::config::core::v3::ExtensionConfigSource config_source;
     envoy::config::core::v3::AggregatedConfigSource ads;
@@ -257,7 +258,7 @@ public:
 // HTTP filter test
 class HttpFilterConfigDiscoveryImplTest
     : public FilterConfigDiscoveryImplTest<
-          NamedHttpFilterFactoryCb, Server::Configuration::FactoryContext,
+          Http::NamedHttpFilterFactoryCb, Server::Configuration::FactoryContext,
           HttpFilterConfigProviderManagerImpl, TestHttpFilterFactory,
           Server::Configuration::NamedHttpFilterConfigFactory,
           Server::Configuration::MockFactoryContext> {
@@ -274,10 +275,10 @@ public:
 // HTTP upstream filter test
 class HttpUpstreamFilterConfigDiscoveryImplTest
     : public FilterConfigDiscoveryImplTest<
-          NamedHttpFilterFactoryCb, Server::Configuration::UpstreamHttpFactoryContext,
+          Http::NamedHttpFilterFactoryCb, Server::Configuration::UpstreamFactoryContext,
           UpstreamHttpFilterConfigProviderManagerImpl, TestHttpFilterFactory,
           Server::Configuration::UpstreamHttpFilterConfigFactory,
-          Server::Configuration::MockUpstreamHttpFactoryContext> {
+          Server::Configuration::MockUpstreamFactoryContext> {
 public:
   const std::string getFilterType() const override { return "http"; }
   const std::string getConfigReloadCounter() const override {
@@ -308,12 +309,12 @@ public:
 // Network upstream filter test
 class NetworkUpstreamFilterConfigDiscoveryImplTest
     : public FilterConfigDiscoveryImplTest<
-          Network::FilterFactoryCb, Server::Configuration::CommonFactoryContext,
+          Network::FilterFactoryCb, Server::Configuration::UpstreamFactoryContext,
           UpstreamNetworkFilterConfigProviderManagerImpl, TestNetworkFilterFactory,
           Server::Configuration::NamedUpstreamNetworkFilterConfigFactory,
-          Server::Configuration::MockFactoryContext> {
+          Server::Configuration::MockUpstreamFactoryContext> {
 public:
-  const std::string getFilterType() const override { return "network"; }
+  const std::string getFilterType() const override { return "upstream_network"; }
   const std::string getConfigReloadCounter() const override {
     return "extension_config_discovery.upstream_network_filter.foo.config_reload";
   }
@@ -584,14 +585,12 @@ TYPED_TEST(FilterConfigDiscoveryImplTestParameter, WrongDefaultConfig) {
       "type.googleapis.com/test.integration.filters.Bogus.");
 }
 
-// Raise exception when filter is not the last filter in filter chain, but the filter is terminal
-// filter. This test does not apply to listener filter.
+// For filters which are not listener and upstream network, raise exception when filter is not the
+// last filter in filter chain, but the filter is terminal. For listener and upstream network filter
+// check that there is no exception raised.
 TYPED_TEST(FilterConfigDiscoveryImplTestParameter, TerminalFilterInvalid) {
   InSequence s;
   TypeParam config_discovery_test;
-  if (config_discovery_test.getFilterType() == "listener") {
-    return;
-  }
 
   config_discovery_test.setup(true, false, false);
   const std::string response_yaml = R"EOF(
@@ -607,6 +606,14 @@ TYPED_TEST(FilterConfigDiscoveryImplTestParameter, TerminalFilterInvalid) {
   const auto decoded_resources =
       TestUtility::decodeResources<envoy::config::core::v3::TypedExtensionConfig>(response);
   EXPECT_CALL(config_discovery_test.init_watcher_, ready());
+
+  if (config_discovery_test.getFilterType() == "listener" ||
+      config_discovery_test.getFilterType() == "upstream_network") {
+    EXPECT_NO_THROW(config_discovery_test.callbacks_->onConfigUpdate(decoded_resources.refvec_,
+                                                                     response.version_info()));
+    return;
+  }
+
   EXPECT_THROW_WITH_MESSAGE(
       config_discovery_test.callbacks_->onConfigUpdate(decoded_resources.refvec_,
                                                        response.version_info()),

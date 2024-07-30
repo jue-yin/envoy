@@ -35,6 +35,9 @@ envoy_cc_library(
     name = "config_lib",
     srcs = ["config_impl.cc"],
     hdrs = ["config_impl.h"],
+    alimesh_deps = [
+        "//contrib/common/active_redirect/source:active_redirect_policy_lib",
+    ],
     external_deps = ["abseil_optional"],
     deps = [
         ":config_utility_lib",
@@ -214,6 +217,9 @@ envoy_cc_library(
         "@envoy_api//envoy/config/route/v3:pkg_cc_proto",
         "@envoy_api//envoy/extensions/filters/network/http_connection_manager/v3:pkg_cc_proto",
     ],
+    alimesh_deps = [
+        "//source/common/http:header_utility_lib",
+    ],
 )
 
 envoy_cc_library(
@@ -281,6 +287,9 @@ envoy_cc_library(
         "router.h",
         "upstream_request.h",
     ],
+    alimesh_deps = [
+        "//envoy/stats:timespan_interface",
+    ],
     deps = [
         ":config_lib",
         ":context_lib",
@@ -335,7 +344,7 @@ envoy_cc_library(
         "//source/common/stream_info:uint32_accessor_lib",
         "//source/common/tracing:http_tracer_lib",
         "//source/common/upstream:load_balancer_lib",
-        "//source/common/upstream:upstream_http_factory_context_lib",
+        "//source/common/upstream:upstream_factory_context_lib",
         "//source/extensions/common/proxy_protocol:proxy_protocol_header_lib",
         "//source/extensions/filters/http/common:factory_base_lib",
         "@envoy_api//envoy/extensions/filters/http/router/v3:pkg_cc_proto",

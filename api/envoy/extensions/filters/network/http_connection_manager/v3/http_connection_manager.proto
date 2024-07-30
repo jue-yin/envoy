@@ -870,6 +870,14 @@ message HttpConnectionManager {
   // This should be set to `false` in cases where Envoy's view of the downstream address may not correspond to the
   // actual client address, for example, if there's another proxy in front of the Envoy.
   google.protobuf.BoolValue add_proxy_protocol_connection_state = 53;
+
+  // The timeout seconds configured here will be set in the "Keep-Alive" response header.
+  // For example, configuring 10s will return the response header "Connection: keep-alive" and "Keep-Alive: timeout=10".
+  // If not specified, the default is 0, which means this behavior is disabled.
+  // The "Keep-Alive" header field is recognized by Mozilla and Apache HTTPClient.
+  // Note that the "Connection" and "Keep-Alive" response headers will only be added when the downstream protocol is HTTP1.0 or HTTP1.1
+  // and it is not an upgrade connection scenario.
+  google.protobuf.Duration keepalive_header_timeout = 1058;
 }
 
 // The configuration to customize local reply returned by Envoy.
@@ -1052,11 +1060,34 @@ message ScopedRoutes {
         }
       }
 
+      message HostValueExtractor {
+        option (udpa.annotations.versioning).previous_message_type =
+            "envoy.config.filter.network.http_connection_manager.v2.ScopedRoutes.ScopeKeyBuilder."
+            "FragmentBuilder.HostValueExtractor";
+
+        // The maximum number of host superset recomputes. If not specified, defaults to 100.
+        google.protobuf.UInt32Value max_recompute_num = 1;
+      }
+
+      message LocalPortValueExtractor {
+        option (udpa.annotations.versioning).previous_message_type =
+            "envoy.config.filter.network.http_connection_manager.v2.ScopedRoutes.ScopeKeyBuilder."
+            "FragmentBuilder.LocalPortValueExtractor";
+      }
+
+
       oneof type {
         option (validate.required) = true;
 
         // Specifies how a header field's value should be extracted.
         HeaderValueExtractor header_value_extractor = 1;
+
+        // Extract the fragemnt value from the :authority header, and support recompute with the wildcard domains,
+        // i.e. ``www.example.com`` can be recomputed with ``*.example.com``, then ``*.com``, then ``*``.
+        HostValueExtractor host_value_extractor = 101;
+
+        // Extract the fragment value from local port of the connection.
+        LocalPortValueExtractor local_port_value_extractor = 102;
       }
     }
 
