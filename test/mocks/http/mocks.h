@@ -260,7 +260,7 @@ public:
   MOCK_METHOD(void, setDecoderBufferLimit, (uint32_t));
   MOCK_METHOD(uint32_t, decoderBufferLimit, ());
   MOCK_METHOD(bool, recreateStream, (const ResponseHeaderMap* headers));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(bool, recreateStream,
               (const ResponseHeaderMap* headers, bool use_original_request_body));
 #endif
@@ -307,7 +307,7 @@ public:
   MOCK_METHOD(RequestTrailerMap&, addDecodedTrailers, ());
   MOCK_METHOD(MetadataMapVector&, addDecodedMetadata, ());
   MOCK_METHOD(const Buffer::Instance*, decodingBuffer, ());
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(void, modifyDecodingBuffer, (std::function<void(Buffer::Instance&)>, bool));
 #endif
   MOCK_METHOD(void, modifyDecodingBuffer, (std::function<void(Buffer::Instance&)>));
@@ -678,7 +678,7 @@ public:
   MOCK_METHOD(ServerHeaderValidatorPtr, makeHeaderValidator, (Protocol protocol));
   MOCK_METHOD(bool, appendXForwardedPort, (), (const));
   MOCK_METHOD(bool, addProxyProtocolConnectionState, (), (const));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(std::chrono::seconds, keepaliveHeaderTimeout, (), (const));
 #endif
 
@@ -943,7 +943,7 @@ MATCHER_P(HeaderMapEqualWithMaxSize, rhs, "") {
 }
 
 MATCHER_P(HeaderMapEqualRef, rhs, "") {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool equal = true;
 
   auto getHeaderItems = [](const Envoy::Http::HeaderMap& header,

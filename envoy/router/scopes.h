@@ -92,7 +92,7 @@ class ScopeKeyBuilder {
 public:
   virtual ~ScopeKeyBuilder() = default;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual ScopeKeyPtr computeScopeKey(const Http::HeaderMap& headers,
                                       const StreamInfo::StreamInfo* info,
                                       std::function<ScopeKeyPtr()>& recompute) const PURE;
@@ -122,7 +122,7 @@ public:
    */
   virtual ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr& scope_key) const PURE;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual ConfigConstSharedPtr
   getRouteConfig(const ScopeKeyBuilder* builder, const Http::HeaderMap& headers,
                  const StreamInfo::StreamInfo* info = nullptr) const PURE;

@@ -144,7 +144,7 @@ TEST_P(WasmTestMatrix, LoggingWithEnvVars) {
   setWasmCode("logging");
   auto wasm_weak = std::weak_ptr<Extensions::Common::Wasm::Wasm>(wasm_);
 
-#ifdef ALIMESH
+#ifdef HIGRESS
   // auto wasm_handler =
   //     std::make_unique<Extensions::Common::Wasm::WasmHandle>(std::move(wasm_), *dispatcher_);
   auto wasm_handler = std::make_unique<Extensions::Common::Wasm::WasmHandle>(std::move(wasm_));

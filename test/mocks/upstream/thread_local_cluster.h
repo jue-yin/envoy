@@ -38,7 +38,7 @@ public:
               (ResourcePriority priority, LoadBalancerContext* context));
   MOCK_METHOD(MockHost::MockCreateConnectionData, tcpConn_, (LoadBalancerContext * context));
   MOCK_METHOD(Http::AsyncClient&, httpAsyncClient, ());
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(Redis::AsyncClient&, redisAsyncClient, ());
 #endif
   MOCK_METHOD(Tcp::AsyncTcpClientPtr, tcpAsyncClient,
@@ -48,7 +48,7 @@ public:
   NiceMock<MockLoadBalancer> lb_;
   NiceMock<Http::ConnectionPool::MockInstance> conn_pool_;
   NiceMock<Http::MockAsyncClient> async_client_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   NiceMock<Redis::MockRedisAsyncClient> redis_async_client_;
 #endif
   NiceMock<Tcp::ConnectionPool::MockInstance> tcp_conn_pool_;

@@ -190,7 +190,7 @@ public:
   const absl::optional<MonotonicTime>& lastUnejectionTime() override { return time_; }
   double successRate(SuccessRateMonitorType) const override { return -1; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   void forceEjectHost() override {}
 #endif
 

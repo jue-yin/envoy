@@ -49,7 +49,7 @@ envoy_cc_library(
         "//bazel:darwin": envoy_all_extensions(DARWIN_SKIP_TARGETS),
         "//conditions:default": envoy_all_extensions(),
     }),
-   alimesh_deps = [
+   higress_deps = [
 #       "//external:basic_auth_lib",
    ],
 )

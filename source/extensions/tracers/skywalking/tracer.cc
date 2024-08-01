@@ -2,7 +2,7 @@
 
 #include <string>
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "source/common/common/base64.h"
 #endif
 
@@ -20,7 +20,7 @@ const Http::LowerCaseString& skywalkingPropagationHeaderKey() {
   CONSTRUCT_ON_FIRST_USE(Http::LowerCaseString, "sw8");
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 const Http::LowerCaseString& skywalkingPropagationHeaderKeyTraceId() {
   CONSTRUCT_ON_FIRST_USE(Http::LowerCaseString, "sw8-traceid");
 }
@@ -65,7 +65,7 @@ void Span::injectContext(Tracing::TraceContext& trace_context,
       tracing_context_->createSW8HeaderValue({remote_address.data(), remote_address.size()});
   if (sw8_header.has_value()) {
     trace_context.setByReferenceKey(skywalkingPropagationHeaderKey(), sw8_header.value());
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     std::vector<std::string> result = absl::StrSplit(sw8_header.value(), '-');
     std::string sw8_trace_id = "";
     if (result.size() > 1) {

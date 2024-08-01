@@ -674,7 +674,7 @@ void HttpIntegrationTest::testRouterUpstreamProtocolError(const std::string& exp
   FakeRawConnectionPtr fake_upstream_connection;
   ASSERT_TRUE(fake_upstreams_[0]->waitForRawConnection(fake_upstream_connection));
   std::string data;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   // We added some custom TRI headers, so the request data changed.
   ASSERT_TRUE(fake_upstream_connection->waitForData(247, &data));
 #else
@@ -1419,7 +1419,7 @@ void HttpIntegrationTest::testManyRequestHeaders(std::chrono::milliseconds time)
        {Http::Headers::get().Path, "/test/long/url"},
        {Http::Headers::get().Scheme, "http"},
        {Http::Headers::get().Host, "sni.lyft.com"}});
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   for (int i = 0; i < 9000; i++) {
     big_headers->addCopy(Http::LowerCaseString(std::to_string(i)), std::string(0, 'a'));
   }

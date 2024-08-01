@@ -44,7 +44,7 @@
 #include "source/common/upstream/load_balancer_impl.h"
 #include "source/common/upstream/upstream_factory_context_impl.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "envoy/stats/timespan.h"
 #endif
 
@@ -582,7 +582,7 @@ private:
   void onPerTryTimeoutCommon(UpstreamRequest& upstream_request, Stats::Counter& error_counter,
                              const std::string& response_code_details);
   Stats::StatName upstreamZone(Upstream::HostDescriptionConstSharedPtr upstream_host);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   void chargeUpstreamGrpcCode(uint64_t http_status_code, uint64_t grpc_response_code,
                               const Http::ResponseHeaderMap& response_headers,
                               Upstream::HostDescriptionConstSharedPtr upstream_host, bool dropped);
@@ -646,7 +646,7 @@ private:
                                    uint64_t grpc_to_http_status);
   Http::Context& httpContext() { return config_.http_context_; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool setupActiveRedirect(const Http::ResponseHeaderMap& headers,
                            UpstreamRequest& upstream_request);
   bool convertRequestHeadersForInternalActiveRedirect(Http::RequestHeaderMap& downstream_headers);

@@ -51,7 +51,7 @@ public:
     return &downstream_connection_;
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Http::FilterHeadersStatus decodeHeaders(Http::RequestHeaderMap& headers,
                                           bool end_stream) override {
     auto status = Filter::decodeHeaders(headers, end_stream);
@@ -99,7 +99,7 @@ public:
   void expectNewStreamWithImmediateEncoder(Http::RequestEncoder& encoder,
                                            Http::ResponseDecoder** decoder,
                                            Http::Protocol protocol);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   void enableActiveRedirects(std::string redirect_url, uint32_t max_internal_redirects = 1,
                              bool forced_use_original_host = false,
                              bool forced_add_header_before_route_matcher = false);

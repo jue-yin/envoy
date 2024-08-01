@@ -39,7 +39,7 @@
 #include "absl/container/node_hash_map.h"
 #include "absl/types/optional.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "contrib/common/active_redirect/source/active_redirect_policy_impl.h"
 #endif
 
@@ -162,7 +162,7 @@ private:
       typed_metadata_;
 };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class SslPermanentRedirector : public SslRedirector {
 public:
   Http::Code responseCode() const override { return Http::Code::PermanentRedirect; }
@@ -446,7 +446,7 @@ private:
   enum class SslRequirements : uint8_t { None, ExternalOnly, All };
 
   static const std::shared_ptr<const SslRedirectRoute> SSL_REDIRECT_ROUTE;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   static const std::shared_ptr<const SslPermanentRedirectRoute> SSL_PERMANENT_REDIRECT_ROUTE;
   static const std::shared_ptr<const SNIRedirectRoute> SNI_REDIRECT_ROUTE;
 #endif
@@ -457,7 +457,7 @@ private:
 
   std::vector<RouteEntryImplBaseConstSharedPtr> routes_;
   Matcher::MatchTreeSharedPtr<Http::HttpMatchingData> matcher_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   std::vector<std::string> allow_server_names_;
 #endif
 };
@@ -770,7 +770,7 @@ public:
     }
     return DefaultInternalRedirectPolicy::get();
   }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   const InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const override {
     if (internal_active_redirect_policy_ != nullptr) {
       return *internal_active_redirect_policy_;
@@ -891,7 +891,7 @@ public:
   // path matching to ignore the path-parameters.
   absl::string_view sanitizePathBeforePathMatching(const absl::string_view path) const;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   class DynamicRouteEntry : public RouteEntryAndRoute,
                             public std::enable_shared_from_this<DynamicRouteEntry> {
 #else
@@ -1028,7 +1028,7 @@ public:
       parent_->traversePerFilterConfig(filter_name, cb);
     };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     const InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const override {
       return parent_->internalActiveRedirectPolicy();
     }
@@ -1135,7 +1135,7 @@ public:
 
     const Http::LowerCaseString& clusterHeaderName() const { return cluster_header_name_; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     RouteConstSharedPtr getRouteConstSharedPtr() const override { return shared_from_this(); }
 #endif
 
@@ -1268,7 +1268,7 @@ private:
   PathRewriterSharedPtr buildPathRewriter(envoy::config::route::v3::Route route,
                                           ProtobufMessage::ValidationVisitor& validator) const;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   std::unique_ptr<InternalActiveRedirectPoliciesImpl>
   buildActiveInternalRedirectPolicy(const envoy::config::route::v3::RouteAction& route_config,
                                     ProtobufMessage::ValidationVisitor& validator,
@@ -1329,7 +1329,7 @@ private:
   PerFilterConfigs per_filter_configs_;
   const std::string route_name_;
   TimeSource& time_source_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   std::unique_ptr<const InternalActiveRedirectPoliciesImpl> internal_active_redirect_policy_;
 #endif
   EarlyDataPolicyPtr early_data_policy_;

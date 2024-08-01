@@ -298,7 +298,7 @@ TEST_F(ExtAuthzHttpClientTest, ContentLengthEqualZeroWithAllowedHeaders) {
   EXPECT_EQ(message_ptr->headers().getMethodValue(), "POST");
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(ExtAuthzHttpClientTest, IsAuthorizationPass) {
   {
     // 200 code without x-mse-external-authz-check-result

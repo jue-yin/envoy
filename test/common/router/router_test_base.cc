@@ -243,7 +243,7 @@ void RouterTestBase::setNumPreviousRedirect(uint32_t num_previous_redirects) {
       StreamInfo::FilterState::StateType::Mutable, StreamInfo::FilterState::LifeSpan::Request);
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void RouterTestBase::enableActiveRedirects(std::string redirect_url,
                                            uint32_t max_internal_redirects,
                                            bool forced_use_original_host,

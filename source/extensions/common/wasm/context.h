@@ -218,7 +218,7 @@ public:
                                Pairs additional_headers, uint32_t grpc_status,
                                std::string_view details) override;
   void clearRouteCache() override {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     if (decoder_callbacks_ && !disable_clear_route_cache_) {
 #else
     if (decoder_callbacks_) {
@@ -244,7 +244,7 @@ public:
   // Buffer
   BufferInterface* getBuffer(WasmBufferType type) override;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   WasmResult setBuffer(WasmBufferType type, size_t start, size_t length,
                        std::string_view data) override;
 #endif
@@ -256,7 +256,7 @@ public:
                       std::string_view request_body, const Pairs& request_trailers,
                       int timeout_millisconds, uint32_t* token_ptr) override;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   // Redis
   WasmResult redisInit(std::string_view cluster, std::string_view username,
                        std::string_view password, int timeout_milliseconds) override;
@@ -332,7 +332,7 @@ protected:
     Http::AsyncClient::Request* request_;
   };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   struct RedisAsyncClientHandler : public Redis::AsyncClient::Callbacks {
     // Redis::AsyncClient::Callbacks
     void onSuccess(std::string_view, std::string&& response) override {
@@ -397,7 +397,7 @@ protected:
   void onHttpCallSuccess(uint32_t token, Envoy::Http::ResponseMessagePtr&& response);
   void onHttpCallFailure(uint32_t token, Http::AsyncClient::FailureReason reason);
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   void onRedisCallSuccess(uint32_t token, std::string&& response);
   void onRedisCallFailure(uint32_t token);
 #endif
@@ -447,7 +447,7 @@ protected:
   // Only available during onHttpCallResponse.
   Envoy::Http::ResponseMessagePtr* http_call_response_{};
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   // Only available during onRedisCallResponse.
   std::string redis_call_response_{};
 #endif
@@ -479,7 +479,7 @@ protected:
 
   // MB: must be a node-type map as we take persistent references to the entries.
   std::map<uint32_t, AsyncClientHandler> http_request_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   std::map<uint32_t, RedisAsyncClientHandler> redis_request_;
 #endif
   std::map<uint32_t, GrpcCallClientHandler> grpc_call_request_;
@@ -496,7 +496,7 @@ protected:
   // Filter state prototype declaration.
   absl::flat_hash_map<std::string, Filters::Common::Expr::CelStatePrototypeConstPtr>
       state_prototypes_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool disable_clear_route_cache_ = false;
 #endif
 };

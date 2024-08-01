@@ -117,7 +117,7 @@ public:
   const EarlyDataPolicy& earlyDataPolicy() const override;
   const RouteStatsContextOptRef routeStatsContext() const override;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   const InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const override {
     return base_route_->routeEntry()->internalActiveRedirectPolicy();
   }

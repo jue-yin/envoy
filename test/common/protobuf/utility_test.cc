@@ -1751,7 +1751,7 @@ TEST(DurationUtilTest, NoThrow) {
   }
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST(DurationUtilTest, ConvertDurationToJsonString) {
   {
     ProtobufWkt::Duration duration;

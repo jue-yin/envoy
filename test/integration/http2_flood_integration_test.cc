@@ -369,7 +369,7 @@ TEST_P(Http2FloodMitigationTest, Data) {
   // 9-byte frame header; 10 bytes per data frame, 10000 bytes total. The output buffer should also
   // contain response headers, which should be less than 100 bytes.
   EXPECT_LE(10000, buffer_factory->maxBufferSize());
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_GE(20000, buffer_factory->maxBufferSize());
 #else
   EXPECT_GE(10100, buffer_factory->maxBufferSize());

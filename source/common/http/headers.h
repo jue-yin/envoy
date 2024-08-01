@@ -129,7 +129,7 @@ public:
     const std::string Wildcard{"*"};
   } VaryValues;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   struct {
     const LowerCaseString TriArriveTime{"req-arrive-time"};
     const LowerCaseString TriCostTime{"req-cost-time"};

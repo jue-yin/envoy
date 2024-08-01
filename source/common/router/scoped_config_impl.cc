@@ -5,14 +5,14 @@
 
 #include "source/common/protobuf/utility.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "source/common/http/header_utility.h"
 #endif
 
 namespace Envoy {
 namespace Router {
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 namespace {
 
 std::string maskFirstDNSLabel(absl::string_view host) {
@@ -281,7 +281,7 @@ ScopeKeyBuilderImpl::ScopeKeyBuilderImpl(ScopedRoutes::ScopeKeyBuilder&& config)
     : ScopeKeyBuilderBase(std::move(config)) {
   for (const auto& fragment_builder : config_.fragments()) {
     switch (fragment_builder.type_case()) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     case ScopedRoutes::ScopeKeyBuilder::FragmentBuilder::kHostValueExtractor:
       fragment_builders_.emplace_back(std::make_unique<HostValueExtractorImpl>(
           ScopedRoutes::ScopeKeyBuilder::FragmentBuilder(fragment_builder)));
@@ -305,7 +305,7 @@ ScopeKeyPtr ScopeKeyBuilderImpl::computeScopeKey(const Http::HeaderMap& headers)
   ScopeKey key;
   for (const auto& builder : fragment_builders_) {
     // returns nullopt if a null fragment is found.
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     ReComputeCbPtr recompute_fragment_cb = std::make_shared<ReComputeCb>();
     std::unique_ptr<ScopeKeyFragmentBase> fragment =
         builder->computeFragment(headers, nullptr, recompute_fragment_cb);

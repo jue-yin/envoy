@@ -130,7 +130,7 @@ TEST_P(AdminInstanceTest, Help) {
   Http::TestResponseHeaderMapImpl header_map;
   Buffer::OwnedImpl response;
   EXPECT_EQ(Http::Code::OK, getCallback("/help", header_map, response));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   const std::string expected = R"EOF(admin commands are:
   /: Admin home page
   /certs: print certs on machine

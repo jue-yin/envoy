@@ -33,7 +33,7 @@
 
 #include "absl/types/optional.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "contrib/envoy/http/active_redirect_policy.h"
 #endif
 
@@ -1102,7 +1102,7 @@ public:
    */
   virtual const std::string& routeName() const PURE;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual const InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const PURE;
 #endif
   /**

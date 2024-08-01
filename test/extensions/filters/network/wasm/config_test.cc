@@ -190,7 +190,7 @@ TEST_P(WasmNetworkFilterConfigTest, FilterConfigFailClosed) {
   NetworkFilters::Wasm::FilterConfig filter_config(proto_config, context_);
   filter_config.wasmForTest()->fail(proxy_wasm::FailState::RuntimeError, "");
   auto context = filter_config.createFilter();
-#ifdef ALIMESH
+#ifdef HIGRESS
   EXPECT_NE(context->wasm(), nullptr);
 #else
   EXPECT_EQ(context->wasm(), nullptr);
@@ -217,7 +217,7 @@ TEST_P(WasmNetworkFilterConfigTest, FilterConfigFailOpen) {
   TestUtility::loadFromYaml(yaml, proto_config);
   NetworkFilters::Wasm::FilterConfig filter_config(proto_config, context_);
   filter_config.wasmForTest()->fail(proxy_wasm::FailState::RuntimeError, "");
-#ifdef ALIMESH
+#ifdef HIGRESS
   EXPECT_NE(filter_config.createFilter(), nullptr);
 #else
   EXPECT_EQ(filter_config.createFilter(), nullptr);

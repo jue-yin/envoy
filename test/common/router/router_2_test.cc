@@ -57,9 +57,9 @@ TEST_F(RouterTestSuppressEnvoyHeaders, MaintenanceMode) {
   router_->decodeHeaders(headers, true);
 }
 
-// if ALIMESH defined,  x-envoy-upstream-service-time will be added anyway.
+// if HIGRESS defined,  x-envoy-upstream-service-time will be added anyway.
 // see https://code.alibaba-inc.com/Ingress/envoy/codereview/13276137
-#ifndef ALIMESH
+#ifndef HIGRESS
 // Validate that x-envoy-upstream-service-time is not added when Envoy header
 // suppression is enabled.
 // TODO(htuch): Probably should be TEST_P with
@@ -435,7 +435,7 @@ TEST_F(RouterTestChildSpan, BasicFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*child_span, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
 #endif
   router_->decodeHeaders(headers, true);
@@ -489,7 +489,7 @@ TEST_F(RouterTestChildSpan, ResetFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*child_span, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
 #endif
   router_->decodeHeaders(headers, true);
@@ -546,7 +546,7 @@ TEST_F(RouterTestChildSpan, CancelFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*child_span, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
 #endif
   router_->decodeHeaders(headers, true);
@@ -600,7 +600,7 @@ TEST_F(RouterTestChildSpan, ResetRetryFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span_1));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*child_span_1, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
 #endif
   router_->decodeHeaders(headers, true);
@@ -645,7 +645,7 @@ TEST_F(RouterTestChildSpan, ResetRetryFlow) {
   EXPECT_CALL(callbacks_.active_span_, spawnChild_(_, "router observability_name egress", _))
       .WillOnce(Return(child_span_2));
   EXPECT_CALL(callbacks_, tracingConfig()).Times(2);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*child_span_2, setTag(Eq(Tracing::Tags::get().PeerIpv4), Eq("10.0.0.5")));
 #endif
   EXPECT_CALL(*child_span_2, setTag(Eq(Tracing::Tags::get().RetryCount), Eq("1")));

@@ -193,7 +193,7 @@ void OnDemandRouteUpdate::onDestroy() {
 // This is the callback which is called when an update requested in requestRouteConfigUpdate()
 // has been propagated to workers, at which point the request processing is restarted from the
 // beginning.
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void OnDemandRouteUpdate::onRouteConfigUpdateCompletion(bool) {
 #else
 void OnDemandRouteUpdate::onRouteConfigUpdateCompletion(bool route_exists) {
@@ -205,7 +205,7 @@ void OnDemandRouteUpdate::onRouteConfigUpdateCompletion(bool route_exists) {
     return;
   }
 
-#if !defined(ALIMESH)
+#if !defined(HIGRESS)
   if (route_exists &&                  // route can be resolved after an on-demand
                                        // VHDS update
       !callbacks_->decodingBuffer() && // Redirects with body not yet supported.

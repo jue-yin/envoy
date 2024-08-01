@@ -539,7 +539,7 @@ public:
    */
   virtual bool addProxyProtocolConnectionState() const PURE;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   /**
    * @return the timeout seconds will be set in the "Keep-Alive" response header.
    * Zero indicates this behavior is disabled.

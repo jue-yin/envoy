@@ -4364,7 +4364,7 @@ TEST_F(RouterTest, CrossSchemeRedirectAllowedByPolicy) {
   router_->onDestroy();
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(RouterTest, InternalActiveRedirectRejectedWhenReachingMaxInternalRedirect) {
   enableActiveRedirects("http://www.foo.com", 3);
   setNumPreviousRedirect(3);
@@ -6005,7 +6005,7 @@ TEST_F(RouterTest, CanaryStatusFalse) {
                 .value());
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(RouterTest, DISABLED_AutoHostRewriteEnabled) {
 #else
 TEST_F(RouterTest, AutoHostRewriteEnabled) {

@@ -110,7 +110,7 @@ private:
 
 using ClientConfigSharedPtr = std::shared_ptr<ClientConfig>;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 bool isAuthorizationPass(const Http::ResponseHeaderMap& headers);
 #endif
 

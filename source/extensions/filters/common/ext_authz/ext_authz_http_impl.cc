@@ -276,7 +276,7 @@ void RawHttpClientImpl::onBeforeFinalizeUpstreamSpan(
   }
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 bool isAuthorizationPass(const Http::ResponseHeaderMap& headers) {
   const uint64_t status_code = Http::Utility::getResponseStatus(headers);
 
@@ -332,7 +332,7 @@ ResponsePtr RawHttpClientImpl::toResponse(Http::ResponseMessagePtr message) {
   message->headers().remove(storage_header_name);
 
   // Create an Ok authorization response.
-#if !defined(ALIMESH)
+#if !defined(HIGRESS)
   if (status_code == enumToInt(Http::Code::OK)) {
 #else
   if (isAuthorizationPass(message->headers())) {

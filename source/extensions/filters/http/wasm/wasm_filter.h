@@ -42,7 +42,7 @@ public:
     if (handle->wasmHandle()) {
       wasm = handle->wasmHandle()->wasm().get();
     }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     auto failed = false;
     if (!wasm) {
       failed = true;

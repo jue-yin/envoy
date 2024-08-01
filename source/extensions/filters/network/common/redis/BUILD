@@ -51,7 +51,7 @@ envoy_cc_library(
         ":redis_command_stats_lib",
         "//envoy/upstream:cluster_manager_interface",
     ],
-    alimesh_deps = [
+    higress_deps = [
         "//envoy/upstream:upstream_interface",
     ],
 )

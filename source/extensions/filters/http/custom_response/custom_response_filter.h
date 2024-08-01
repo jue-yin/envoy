@@ -50,7 +50,7 @@ private:
   const std::shared_ptr<const FilterConfig> config_;
   ::Envoy::Http::RequestHeaderMap* downstream_headers_ = nullptr;
   bool on_local_reply_called_ = false;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool has_rules_ = false;
 #endif
 };

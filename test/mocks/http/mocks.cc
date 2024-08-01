@@ -73,7 +73,7 @@ template <class T> static void initializeMockStreamFilterCallbacks(T& callbacks)
 MockStreamDecoderFilterCallbacks::MockStreamDecoderFilterCallbacks() {
   initializeMockStreamFilterCallbacks(*this);
   ON_CALL(*this, decodingBuffer()).WillByDefault(Invoke(&buffer_, &Buffer::InstancePtr::get));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   ON_CALL(*this, modifyDecodingBuffer(_, _))
       .WillByDefault(Invoke(
           [this](std::function<void(Buffer::Instance&)> callback, bool backup_for_replace) -> void {

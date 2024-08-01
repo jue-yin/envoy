@@ -59,7 +59,7 @@ namespace {
 // FilterState prefix for CelState values.
 constexpr absl::string_view CelStateKeyPrefix = "wasm.";
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 constexpr absl::string_view CustomeTraceSpanTagPrefix = "trace_span_tag.";
 constexpr std::string_view ClearRouteCacheKey = "clear_route_cache";
 constexpr std::string_view DisableClearRouteCache = "off";
@@ -473,7 +473,7 @@ Context::findValue(absl::string_view name, Protobuf::Arena* arena, bool last) co
   using google::api::expr::runtime::CelProtoWrapper;
   using google::api::expr::runtime::CelValue;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Envoy::Http::StreamFilterCallbacks* filter_callbacks = decoder_callbacks_;
   if (filter_callbacks == nullptr) {
     filter_callbacks = encoder_callbacks_;
@@ -566,7 +566,7 @@ Context::findValue(absl::string_view name, Protobuf::Arena* arena, bool last) co
     }
     break;
   case PropertyToken::ROUTE_NAME:
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     if (info && !info->getRouteName().empty()) {
       return CelValue::CreateString(&info->getRouteName());
     }
@@ -762,7 +762,7 @@ WasmResult Context::addHeaderMapValue(WasmHeaderMapType type, std::string_view k
   }
   const Http::LowerCaseString lower_key{std::string(key)};
   map->addCopy(lower_key, std::string(value));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
       !disable_clear_route_cache_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
@@ -844,7 +844,7 @@ WasmResult Context::setHeaderMapPairs(WasmHeaderMapType type, const Pairs& pairs
     const Http::LowerCaseString lower_key{std::string(p.first)};
     map->addCopy(lower_key, std::string(p.second));
   }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
       !disable_clear_route_cache_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
@@ -864,7 +864,7 @@ WasmResult Context::removeHeaderMapValue(WasmHeaderMapType type, std::string_vie
   }
   const Http::LowerCaseString lower_key{std::string(key)};
   map->remove(lower_key);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
       !disable_clear_route_cache_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
@@ -885,7 +885,7 @@ WasmResult Context::replaceHeaderMapValue(WasmHeaderMapType type, std::string_vi
   }
   const Http::LowerCaseString lower_key{std::string(key)};
   map->setCopy(lower_key, toAbslStringView(value));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (type == WasmHeaderMapType::RequestHeaders && decoder_callbacks_ &&
       !disable_clear_route_cache_) {
     decoder_callbacks_->downstreamCallbacks()->clearRouteCache();
@@ -953,7 +953,7 @@ BufferInterface* Context::getBuffer(WasmBufferType type) {
           std::string_view(static_cast<const char*>(body.linearize(body.length())), body.length()));
     }
     return nullptr;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   case WasmBufferType::RedisCallResponse:
     return buffer_.set(rootContext()->redis_call_response_);
 #endif
@@ -964,7 +964,7 @@ BufferInterface* Context::getBuffer(WasmBufferType type) {
   }
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 /**
  * The goal here is to have the wasm filter cache the original body when replacing the entire body
  * using the backup_for_replace mechanism of modifyDecodingBuffer. A special case to consider here
@@ -1080,7 +1080,7 @@ WasmResult Context::httpCall(std::string_view cluster, const Pairs& request_head
   return WasmResult::Ok;
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 WasmResult Context::redisInit(std::string_view cluster, std::string_view username,
                               std::string_view password, int timeout_milliseconds) {
   auto cluster_string = std::string(cluster.substr(0, cluster.find('?')));
@@ -1306,7 +1306,7 @@ WasmResult Context::setProperty(std::string_view path, std::string_view value) {
   if (!stream_info) {
     return WasmResult::NotFound;
   }
-#ifdef ALIMESH
+#ifdef HIGRESS
   if (absl::StartsWith(path, CustomeTraceSpanTagPrefix)) {
     stream_info->setCustomSpanTag(path.substr(CustomeTraceSpanTagPrefix.size()), value);
     return WasmResult::Ok;
@@ -1327,7 +1327,7 @@ WasmResult Context::setProperty(std::string_view path, std::string_view value) {
                                         StreamInfo::FilterState::StateType::Mutable,
                                         prototype.life_span_);
   }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (path == ClearRouteCacheKey) {
     disable_clear_route_cache_ = value == DisableClearRouteCache;
   } else if (path == SetDecoderBufferLimit && decoder_callbacks_) {
@@ -1557,7 +1557,7 @@ Context::~Context() {
   for (auto& p : grpc_stream_) {
     p.second.stream_->resetStream();
   }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   for (auto& p : redis_request_) {
     p.second.request_->cancel();
   }
@@ -1626,7 +1626,7 @@ Network::FilterStatus Context::onNewConnection() {
 };
 
 Network::FilterStatus Context::onData(::Envoy::Buffer::Instance& data, bool end_stream) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1643,7 +1643,7 @@ Network::FilterStatus Context::onData(::Envoy::Buffer::Instance& data, bool end_
 }
 
 Network::FilterStatus Context::onWrite(::Envoy::Buffer::Instance& data, bool end_stream) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1665,7 +1665,7 @@ Network::FilterStatus Context::onWrite(::Envoy::Buffer::Instance& data, bool end
 }
 
 void Context::onEvent(Network::ConnectionEvent event) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1702,7 +1702,7 @@ void Context::log(const Http::RequestHeaderMap* request_headers,
   if (!stream_info.requestComplete().has_value()) {
     return;
   }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1911,7 +1911,7 @@ Http::FilterHeadersStatus Context::decodeHeaders(Http::RequestHeaderMap& headers
 }
 
 Http::FilterDataStatus Context::decodeData(::Envoy::Buffer::Instance& data, bool end_stream) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1939,7 +1939,7 @@ Http::FilterDataStatus Context::decodeData(::Envoy::Buffer::Instance& data, bool
 }
 
 Http::FilterTrailersStatus Context::decodeTrailers(Http::RequestTrailerMap& trailers) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1955,7 +1955,7 @@ Http::FilterTrailersStatus Context::decodeTrailers(Http::RequestTrailerMap& trai
 }
 
 Http::FilterMetadataStatus Context::decodeMetadata(Http::MetadataMap& request_metadata) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1980,7 +1980,7 @@ Http::Filter1xxHeadersStatus Context::encode1xxHeaders(Http::ResponseHeaderMap&)
 
 Http::FilterHeadersStatus Context::encodeHeaders(Http::ResponseHeaderMap& headers,
                                                  bool end_stream) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -1997,7 +1997,7 @@ Http::FilterHeadersStatus Context::encodeHeaders(Http::ResponseHeaderMap& header
 }
 
 Http::FilterDataStatus Context::encodeData(::Envoy::Buffer::Instance& data, bool end_stream) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -2025,7 +2025,7 @@ Http::FilterDataStatus Context::encodeData(::Envoy::Buffer::Instance& data, bool
 }
 
 Http::FilterTrailersStatus Context::encodeTrailers(Http::ResponseTrailerMap& trailers) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {
@@ -2041,7 +2041,7 @@ Http::FilterTrailersStatus Context::encodeTrailers(Http::ResponseTrailerMap& tra
 }
 
 Http::FilterMetadataStatus Context::encodeMetadata(Http::MetadataMap& response_metadata) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (destroyed_ || !in_vm_context_created_) {
 #else
   if (!in_vm_context_created_) {

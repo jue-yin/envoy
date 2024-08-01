@@ -911,7 +911,7 @@ public:
    */
   virtual void setDownstreamTransportFailureReason(absl::string_view failure_reason) PURE;
 
-#ifdef ALIMESH
+#ifdef HIGRESS
   /**
    * @param key the filter state key set by wasm filter.
    * @param value the filter state value set by wasm filter.

@@ -103,7 +103,7 @@ def envoy_cc_library(
         tags = [],
         deps = [],
         strip_include_prefix = None,
-        alimesh_deps = [],
+        higress_deps = [],
         include_prefix = None,
         textual_hdrs = None,
         alwayslink = None,
@@ -113,8 +113,8 @@ def envoy_cc_library(
         deps += tcmalloc_external_deps(repository)
 
     deps = deps + select({
-        "@envoy//bazel:alimesh": [],
-        "//conditions:default": alimesh_deps,
+        "@envoy//bazel:higress": [],
+        "//conditions:default": higress_deps,
     })
 
     # If alwayslink is not specified, allow turning it off via --define=library_autolink=disabled

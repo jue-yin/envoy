@@ -16,7 +16,7 @@
 namespace Envoy {
 namespace Secret {
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class SecretManagerImpl : public SecretManager, public Logger::Loggable<Logger::Id::secret> {
 #else
 class SecretManagerImpl : public SecretManager {

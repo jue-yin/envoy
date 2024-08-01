@@ -242,7 +242,7 @@ ConnectionManagerUtility::MutateRequestHeadersResult ConnectionManagerUtility::m
     cleanInternalHeaders(request_headers, edge_request, route_config.internalOnlyHeaders());
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   request_headers.setReferenceKey(Http::CustomHeaders::get().AliExtendedValues.XEnvoyOriginalHost,
                                   request_headers.getHostValue());
 #endif

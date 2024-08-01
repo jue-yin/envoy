@@ -61,7 +61,7 @@ envoy_cc_library(
 envoy_cc_library(
     name = "router_interface",
     hdrs = ["router.h"],
-    alimesh_deps = [
+    higress_deps = [
         "//contrib/envoy/http:active_redirect_policy_interface",
     ],
     external_deps = ["abseil_optional"],

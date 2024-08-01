@@ -77,7 +77,7 @@ public:
     return &downstream_connection_;
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Http::FilterHeadersStatus decodeHeaders(Http::RequestHeaderMap& headers,
                                           bool end_stream) override {
     auto status = Filter::decodeHeaders(headers, end_stream);

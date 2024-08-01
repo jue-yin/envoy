@@ -54,7 +54,7 @@ using ::testing::NiceMock;
 using ::testing::Pair;
 using ::testing::Return;
 using ::testing::ReturnRef;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 using ::testing::ReturnPointee;
 #endif
 
@@ -3169,7 +3169,7 @@ TEST_F(RouterMatcherHashPolicyTest, HashIpv4DifferentAddresses) {
   }
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(RouterMatcherHashPolicyTest, DISABLED_HashIpv6DifferentAddresses) {
 #else
 TEST_F(RouterMatcherHashPolicyTest, HashIpv6DifferentAddresses) {
@@ -3702,7 +3702,7 @@ virtual_hosts:
   EXPECT_EQ(mock_route.get(), config.route(genHeaders("some_cluster", "/bar", "GET"), 0).get());
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(RouteMatcherTest, WeightedClusterSpecifierPlugin) {
   const std::string yaml = R"EOF(
 cluster_specifier_plugins:
@@ -7397,7 +7397,7 @@ request_headers_to_add:
   EXPECT_EQ("127.0.0.1", headers.get_("x-client-ip"));
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(CustomRequestHeadersTest, AddMseOriginalPathHeader) {
   const std::string yaml = R"EOF(
 virtual_hosts:
@@ -10614,7 +10614,7 @@ virtual_hosts:
       internal_redirect_policy.shouldRedirectForResponseCode(static_cast<Http::Code>(200)));
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(RouteConfigurationV2, InternalActiveRedirectIsDisabledWhenNotSpecifiedInRouteAction) {
   const std::string yaml = R"EOF(
 virtual_hosts:
@@ -11940,7 +11940,7 @@ virtual_hosts:
       },
       genHeaders("bat.com", "/", "GET"));
   EXPECT_NE(nullptr, dynamic_cast<const SslRedirectRoute*>(accepted_route.get()));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_EQ(Http::Code::MovedPermanently,
             dynamic_cast<const SslRedirectRoute*>(accepted_route.get())
                 ->directResponseEntry()
@@ -12027,7 +12027,7 @@ virtual_hosts:
             shared_config.ignorePathParametersInPathMatching());
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(RouteMatchOverrideTest, NullRouteOnExactAllowServerNames) {
   const std::string yaml = R"EOF(
 virtual_hosts:

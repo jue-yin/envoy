@@ -227,7 +227,7 @@ public:
   }
   bool appendXForwardedPort() const override { return false; }
   bool addProxyProtocolConnectionState() const override { return true; }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   std::chrono::seconds keepaliveHeaderTimeout() const override { return {}; }
 #endif
 
@@ -317,7 +317,7 @@ private:
     NullScopeKeyBuilder() = default;
     ~NullScopeKeyBuilder() override = default;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     Router::ScopeKeyPtr computeScopeKey(const Http::HeaderMap&, const StreamInfo::StreamInfo*,
                                         std::function<Router::ScopeKeyPtr()>&) const override {
       return nullptr;

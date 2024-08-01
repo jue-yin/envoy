@@ -49,7 +49,7 @@ static std::vector<absl::string_view> unsuported_win32_configs = {
 #if defined(WIN32) && !defined(SO_ORIGINAL_DST)
     "configs_original-dst-cluster_proxy_config.yaml",
 #endif
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     // The test platform does not support udp Gro feature.
     "udp_envoy.yaml"
 #endif

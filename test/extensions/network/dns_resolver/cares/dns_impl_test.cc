@@ -1121,7 +1121,7 @@ TEST_P(DnsImplTest, DestroyChannelOnResetNetworking) {
 
 // This test will failed beacuse of c-ares libray, we can fix it in the next version merge, see
 // https://github.com/envoyproxy/envoy/pull/33711
-#ifndef ALIMESH
+#ifndef HIGRESS
 // Validate that the c-ares channel is destroyed and re-initialized when c-ares returns
 // ARES_ECONNREFUSED as its callback status.
 TEST_P(DnsImplTest, DestroyChannelOnRefused) {

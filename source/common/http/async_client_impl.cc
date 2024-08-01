@@ -33,7 +33,7 @@ const AsyncStreamImpl::RouteEntryImpl::ConnectConfigOptRef
     AsyncStreamImpl::RouteEntryImpl::connect_config_nullopt_;
 const std::list<LowerCaseString> AsyncStreamImpl::NullCommonConfig::internal_only_headers_;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 const Router::InternalActiveRedirectPoliciesImpl
     AsyncStreamImpl::RouteEntryImpl::internal_active_redirect_policy_;
 #endif

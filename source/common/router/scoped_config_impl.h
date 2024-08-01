@@ -22,7 +22,7 @@ namespace Router {
 
 using envoy::extensions::filters::network::http_connection_manager::v3::ScopedRoutes;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 using ReComputeCb = std::function<std::unique_ptr<ScopeKeyFragmentBase>()>;
 using ReComputeCbPtr = std::shared_ptr<ReComputeCb>;
 using ReComputeCbWeakPtr = std::weak_ptr<ReComputeCb>;
@@ -37,7 +37,7 @@ public:
       : config_(std::move(config)) {}
   virtual ~FragmentBuilderBase() = default;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual std::unique_ptr<ScopeKeyFragmentBase>
   computeFragment(const Http::HeaderMap& headers, const StreamInfo::StreamInfo* info,
                   ReComputeCbPtr& recompute) const PURE;
@@ -56,7 +56,7 @@ class HeaderValueExtractorImpl : public FragmentBuilderBase {
 public:
   explicit HeaderValueExtractorImpl(ScopedRoutes::ScopeKeyBuilder::FragmentBuilder&& config);
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   std::unique_ptr<ScopeKeyFragmentBase> computeFragment(const Http::HeaderMap& headers,
                                                         const StreamInfo::StreamInfo* info,
                                                         ReComputeCbPtr& recompute) const override;
@@ -72,7 +72,7 @@ private:
       header_value_extractor_config_;
 };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class HostValueExtractorImpl : public FragmentBuilderBase {
 public:
   explicit HostValueExtractorImpl(ScopedRoutes::ScopeKeyBuilder::FragmentBuilder&& config);
@@ -118,7 +118,7 @@ class ScopeKeyBuilderImpl : public ScopeKeyBuilderBase {
 public:
   explicit ScopeKeyBuilderImpl(ScopedRoutes::ScopeKeyBuilder&& config);
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   ScopeKeyPtr computeScopeKey(const Http::HeaderMap& headers, const StreamInfo::StreamInfo* info,
                               std::function<ScopeKeyPtr()>& recompute) const override;
   // only for test
@@ -177,7 +177,7 @@ public:
 
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr& scope_key) const override;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder* scope_key_builder,
                                               const Http::HeaderMap& headers,
                                               const StreamInfo::StreamInfo* info) const override;
@@ -201,7 +201,7 @@ public:
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr&) const override {
     return std::make_shared<const NullConfigImpl>();
   }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder*, const Http::HeaderMap&,
                                               const StreamInfo::StreamInfo*) const override {
     return std::make_shared<const NullConfigImpl>();

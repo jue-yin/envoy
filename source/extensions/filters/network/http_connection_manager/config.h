@@ -267,7 +267,7 @@ public:
   bool addProxyProtocolConnectionState() const override {
     return add_proxy_protocol_connection_state_;
   }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   std::chrono::seconds keepaliveHeaderTimeout() const override { return keepalive_header_timeout_; }
 #endif
 
@@ -356,7 +356,7 @@ private:
   static const uint64_t RequestTimeoutMs = 0;
   // request header timeout is disabled by default
   static const uint64_t RequestHeaderTimeoutMs = 0;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   // keep-alive response header is disabled by default
   static const uint64_t KeepaliveHeaderTimeoutSeconds = 0;
 #endif
@@ -368,7 +368,7 @@ private:
   const Http::HeaderValidatorFactoryPtr header_validator_factory_;
   const bool append_x_forwarded_port_;
   const bool add_proxy_protocol_connection_state_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   const std::chrono::seconds keepalive_header_timeout_;
 #endif
 };

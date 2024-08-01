@@ -443,7 +443,7 @@ protected:
   void compareHeaders(Headers&& headers, const ExpectedHeaders& expected_headers) {
     headers.remove(Envoy::Http::LowerCaseString{"content-length"});
     headers.remove(Envoy::Http::LowerCaseString{"date"});
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     headers.remove(Envoy::Http::LowerCaseString{"req-start-time"});
     headers.remove(Envoy::Http::LowerCaseString{"req-cost-time"});
     headers.remove(Envoy::Http::LowerCaseString{"x-envoy-original-host"});

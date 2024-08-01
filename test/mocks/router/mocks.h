@@ -162,7 +162,7 @@ public:
   MOCK_METHOD(bool, isCrossSchemeRedirectAllowed, (), (const));
 };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class MockInternalActiveRedirectPolicy : public InternalActiveRedirectPolicy {
 public:
   MockInternalActiveRedirectPolicy();
@@ -456,7 +456,7 @@ public:
   MOCK_METHOD(const EarlyDataPolicy&, earlyDataPolicy, (), (const));
   MOCK_METHOD(const RouteStatsContextOptRef, routeStatsContext, (), (const));
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(const InternalActiveRedirectPolicy&, internalActiveRedirectPolicy, (), (const));
 #endif
 
@@ -480,7 +480,7 @@ public:
   UpgradeMap upgrade_map_;
   absl::optional<ConnectConfig> connect_config_;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   testing::NiceMock<MockInternalActiveRedirectPolicy> internal_active_redirect_policy_;
 #endif
   testing::NiceMock<MockEarlyDataPolicy> early_data_policy_;
@@ -615,7 +615,7 @@ public:
 
   MOCK_METHOD(ConfigConstSharedPtr, getRouteConfig, (const ScopeKeyPtr& scope_key), (const));
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(ConfigConstSharedPtr, getRouteConfig,
               (const ScopeKeyBuilder*, const Http::HeaderMap&, const StreamInfo::StreamInfo*),
               (const));
@@ -644,7 +644,7 @@ public:
   MockScopeKeyBuilder();
   ~MockScopeKeyBuilder() override;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(ScopeKeyPtr, computeScopeKey,
               (const Http::HeaderMap&, const StreamInfo::StreamInfo*,
                std::function<ScopeKeyPtr()>& recompute),

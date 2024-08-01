@@ -35,7 +35,7 @@ public:
 private:
   Common::Redis::EncoderImpl real_encoder_;
 };
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class MockRawEncoder : public Common::Redis::RawEncoder {
 public:
   MockRawEncoder();
@@ -122,7 +122,7 @@ public:
               (Common::Redis::RespValuePtr & value, const std::string& host_address,
                bool ask_redirection));
 };
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class MockRawClientCallbacks : public RawClientCallbacks {
 public:
   MockRawClientCallbacks();

@@ -147,7 +147,7 @@ public:
     context_->setEncoderFilterCallbacks(encoder_callbacks_);
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   template <typename TestFilter> void doRecover() {
     std::shared_ptr<proxy_wasm::PluginHandleBase> new_handle;
     if (WasmTestBase<Base>::plugin_handle_->doRecover(new_handle)) {

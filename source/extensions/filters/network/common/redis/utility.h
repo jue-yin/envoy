@@ -18,7 +18,7 @@ public:
 };
 
 RespValuePtr makeError(const std::string& error);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 std::string makeRawError(const std::string& error);
 std::string makeRawAuthRequest(const std::string& password);
 std::string makeRawAuthRequest(const std::string& username, const std::string& password);

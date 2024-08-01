@@ -143,7 +143,7 @@ public:
    * owns the client.
    */
   virtual Http::AsyncClient& httpAsyncClient() PURE;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual Redis::AsyncClient& redisAsyncClient() PURE;
 #endif
 

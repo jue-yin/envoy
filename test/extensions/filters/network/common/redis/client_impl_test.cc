@@ -1224,7 +1224,7 @@ TEST(RedisClientFactoryImplTest, Basic) {
                                     *stats_.rootScope(), auth_username, auth_password, false);
   client->close();
 }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RedisRawClientDefaultConfig : public Config {
   std::chrono::milliseconds opTimeout() const override { return std::chrono::milliseconds(20); }
   // Cluster is not supported

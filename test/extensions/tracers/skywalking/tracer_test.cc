@@ -218,7 +218,7 @@ TEST_F(TracerTest, TracerTestCreateNewSpanWithNoPropagationHeaders) {
     EXPECT_NE(0, third_child_span->spanEntity()->endTime());
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   {
     Envoy::Tracing::SpanPtr org_child_span_with_traceid_header =
         org_span->spawnChild(mock_tracing_config_, "TestChild", mock_time_source_.systemTime());

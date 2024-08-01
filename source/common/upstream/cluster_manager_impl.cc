@@ -51,7 +51,7 @@
 #include "source/common/quic/client_connection_factory_impl.h"
 #endif
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "source/common/redis/async_client_impl.h"
 #endif
 
@@ -1207,7 +1207,7 @@ ClusterManagerImpl::ThreadLocalClusterManagerImpl::ClusterEntry::httpAsyncClient
   return *lazy_http_async_client_;
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 Redis::AsyncClient&
 ClusterManagerImpl::ThreadLocalClusterManagerImpl::ClusterEntry::redisAsyncClient() {
   using Extensions::NetworkFilters::Common::Redis::RedisCommandStats;

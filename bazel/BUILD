@@ -673,11 +673,11 @@ config_setting(
     define_values = {"FUZZING_ENGINE": "oss-fuzz"},
 )
 
-# By default we enable AliMesh build. If want to build community
-# version then build Envoy with flag of '--define alimesh=false'.
+# By default we enable Higress build. If want to build community
+# version then build Envoy with flag of '--define higress=false'.
 config_setting(
-    name = "alimesh",
-    values = {"define": "alimesh=false"},
+    name = "higress",
+    values = {"define": "higress=false"},
 )
 
 alias(

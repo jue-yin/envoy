@@ -750,7 +750,7 @@ void ConnectionManagerImpl::RdsRouteConfigUpdateRequester::requestRouteConfigUpd
     const auto& host_header = absl::AsciiStrToLower(parent_.request_headers_->getHostValue());
     requestVhdsUpdate(host_header, thread_local_dispatcher, std::move(route_config_updated_cb));
     return;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     Router::ScopeKeyPtr scope_key = parent_.snapped_scoped_routes_config_->computeScopeKey(
         scope_key_builder_.ptr(), *parent_.request_headers_, &parent_.connection()->streamInfo());
 #else
@@ -1003,7 +1003,7 @@ void ConnectionManagerImpl::ActiveStream::onStreamMaxDurationReached() {
 void ConnectionManagerImpl::ActiveStream::chargeStats(const ResponseHeaderMap& headers) {
   uint64_t response_code = Utility::getResponseStatus(headers);
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (Grpc::Common::hasGrpcContentType(headers)) {
     absl::optional<Grpc::Status::GrpcStatus> grpc_status = Grpc::Common::getGrpcStatus(headers);
     if (grpc_status.has_value()) {
@@ -1516,7 +1516,7 @@ void ConnectionManagerImpl::startDrainSequence() {
 }
 
 void ConnectionManagerImpl::ActiveStream::snapScopedRouteConfig() {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   snapped_route_config_ = snapped_scoped_routes_config_->getRouteConfig(
       connection_manager_.config_.scopeKeyBuilder().ptr(), *request_headers_,
       &connection()->streamInfo());
@@ -1796,7 +1796,7 @@ void ConnectionManagerImpl::ActiveStream::encodeHeaders(ResponseHeaderMap& heade
     blockRouteCache();
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (!state_.is_tunneling_ && connection_manager_.codec_->protocol() < Protocol::Http2) {
     if (connection_manager_.drain_state_ != DrainState::NotDraining) {
       // If the connection manager is draining send "Connection: Close" on HTTP/1.1 connections.
@@ -2153,7 +2153,7 @@ void ConnectionManagerImpl::ActiveStream::onRequestDataTooLarge() {
   connection_manager_.stats_.named_.downstream_rq_too_large_.inc();
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void ConnectionManagerImpl::ActiveStream::recreateStream(
     StreamInfo::FilterStateSharedPtr filter_state) {
   return recreateStream(filter_state, false);
@@ -2168,7 +2168,7 @@ void ConnectionManagerImpl::ActiveStream::recreateStream(
   response_encoder_ = nullptr;
 
   Buffer::InstancePtr request_data = std::make_unique<Buffer::OwnedImpl>();
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool proxy_body = false;
   const auto& original_buffered_request_data = filter_manager_.originalBufferedRequestData();
   if (use_original_request_body && original_buffered_request_data != nullptr &&

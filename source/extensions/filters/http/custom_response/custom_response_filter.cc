@@ -16,7 +16,7 @@ namespace CustomResponse {
 
 Http::FilterHeadersStatus CustomResponseFilter::decodeHeaders(Http::RequestHeaderMap& header_map,
                                                               bool) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   downstream_headers_ = &header_map;
   const FilterConfig* config = nullptr;
   if (decoder_callbacks_ && decoder_callbacks_->route()) {
@@ -58,7 +58,7 @@ Http::FilterHeadersStatus CustomResponseFilter::encodeHeaders(Http::ResponseHead
   // If filter state for custom response exists, it means this response is a
   // custom response. Apply the custom response mutations to the response from
   // the remote source and return.
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   auto filter_state =
       encoder_callbacks_->streamInfo().filterState()->getDataMutable<CustomResponseFilterState>(
           CustomResponseFilterState::kFilterStateName);
@@ -77,7 +77,7 @@ Http::FilterHeadersStatus CustomResponseFilter::encodeHeaders(Http::ResponseHead
   // policy. Note that since the traversal is least to most specific, we can't
   // return early when a match is found.
   PolicySharedPtr policy;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (has_rules_) {
 #endif
     decoder_callbacks_->traversePerFilterConfig(
@@ -92,7 +92,7 @@ Http::FilterHeadersStatus CustomResponseFilter::encodeHeaders(Http::ResponseHead
             }
           }
         });
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   }
 #endif
   if (!policy) {
@@ -101,7 +101,7 @@ Http::FilterHeadersStatus CustomResponseFilter::encodeHeaders(Http::ResponseHead
 
   // A valid custom response was not found. We should just pass through.
   if (!policy) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     if (filter_state) {
       // Trigger policy process the response
       filter_state->remain_redirect_times = 0;

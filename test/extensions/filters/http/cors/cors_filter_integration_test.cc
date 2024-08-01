@@ -230,7 +230,7 @@ protected:
                       Http::TestResponseHeaderMapImpl& expected_response_headers) {
     response_headers.remove(Envoy::Http::LowerCaseString{"date"});
     response_headers.remove(Envoy::Http::LowerCaseString{"x-envoy-upstream-service-time"});
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     response_headers.remove(Envoy::Http::LowerCaseString{"req-cost-time"});
     response_headers.remove(Envoy::Http::LowerCaseString{"req-start-time"});
     response_headers.remove(Envoy::Http::LowerCaseString{"req-arrive-time"});

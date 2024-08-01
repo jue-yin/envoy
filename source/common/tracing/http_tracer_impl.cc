@@ -218,7 +218,7 @@ void HttpTracerUtility::setCommonTags(Span& span, const StreamInfo::StreamInfo& 
 
   span.setTag(Tracing::Tags::get().Component, Tracing::Tags::get().Proxy);
 
-#ifdef ALIMESH
+#ifdef HIGRESS
   // Wasm filter state
   const auto& custom_span_tags = stream_info.getCustomSpanTagMap();
   for (const auto& it: custom_span_tags) {

@@ -137,7 +137,7 @@ void TcpHealthCheckerImpl::TcpActiveHealthCheckSession::onInterval() {
     client_->addReadFilter(session_callbacks_);
 
     expect_close_ = false;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     try {
       client_->connect();
     } catch (const EnvoyException& ex) {

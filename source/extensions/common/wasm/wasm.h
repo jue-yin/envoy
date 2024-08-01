@@ -90,7 +90,7 @@ public:
   }
   void setFailStateForTesting(proxy_wasm::FailState fail_state) { failed_ = fail_state; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   LifecycleStats& lifecycleStats() { return lifecycle_stats_handler_.stats(); }
 #endif
 
@@ -157,7 +157,7 @@ private:
 
 using PluginHandleSharedPtr = std::shared_ptr<PluginHandle>;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class PluginHandleSharedPtrThreadLocal : public ThreadLocal::ThreadLocalObject,
                                          public Logger::Loggable<Logger::Id::wasm> {
 public:
@@ -172,7 +172,7 @@ public:
 
 private:
   PluginHandleSharedPtr handle_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MonotonicTime last_recover_time_;
 #endif
 };

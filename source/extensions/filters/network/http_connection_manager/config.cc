@@ -385,7 +385,7 @@ HttpConnectionManagerConfig::HttpConnectionManagerConfig(
           createHeaderValidatorFactory(config, context.getServerFactoryContext())),
       append_x_forwarded_port_(config.append_x_forwarded_port()),
       add_proxy_protocol_connection_state_(
-#if defined(ALIMESH)
+#if defined(HIGRESS)
           PROTOBUF_GET_WRAPPED_OR_DEFAULT(config, add_proxy_protocol_connection_state, true)),
       keepalive_header_timeout_(PROTOBUF_GET_SECONDS_OR_DEFAULT(config, keepalive_header_timeout,
                                                                 KeepaliveHeaderTimeoutSeconds)) {

@@ -29,7 +29,7 @@ MockEncoder::MockEncoder() {
 }
 
 MockEncoder::~MockEncoder() = default;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 MockRawEncoder::MockRawEncoder() {
   ON_CALL(*this, encode(_, _))
       .WillByDefault(Invoke([this](std::string_view value, Buffer::Instance& out) -> void {
@@ -62,7 +62,7 @@ MockPoolRequest::~MockPoolRequest() = default;
 
 MockClientCallbacks::MockClientCallbacks() = default;
 MockClientCallbacks::~MockClientCallbacks() = default;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 MockRawClientCallbacks::MockRawClientCallbacks() = default;
 MockRawClientCallbacks::~MockRawClientCallbacks() = default;
 #endif

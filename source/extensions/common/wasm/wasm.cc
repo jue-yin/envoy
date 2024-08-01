@@ -60,7 +60,7 @@ inline Wasm* getWasm(WasmHandleSharedPtr& base_wasm_handle) {
   return static_cast<Wasm*>(base_wasm_handle->wasm().get());
 }
 
-#ifdef ALIMESH
+#ifdef HIGRESS
 WasmEvent failStateToWasmEvent(FailState state) {
   switch (state) {
   case FailState::Ok:
@@ -111,7 +111,7 @@ Wasm::Wasm(WasmConfig& config, absl::string_view vm_key, const Stats::ScopeShare
       custom_stat_namespace_(stat_name_pool_.add(CustomStatNamespace)),
       cluster_manager_(cluster_manager), dispatcher_(dispatcher),
       time_source_(dispatcher.timeSource()),
-#ifdef ALIMESH
+#ifdef HIGRESS
       lifecycle_stats_handler_(LifecycleStatsHandler(scope, config.config().vm_config().runtime(),
                                                      config.config().name())) {
 #else
@@ -136,7 +136,7 @@ Wasm::Wasm(WasmHandleSharedPtr base_wasm_handle, Event::Dispatcher& dispatcher)
       time_source_(dispatcher.timeSource()),
       lifecycle_stats_handler_(getWasm(base_wasm_handle)->lifecycle_stats_handler_) {
   lifecycle_stats_handler_.onEvent(WasmEvent::VmCreated);
-#ifdef ALIMESH
+#ifdef HIGRESS
   auto* vm = wasm_vm();
   if (vm) {
     vm->addFailCallback([this](FailState fail_state) {
@@ -194,7 +194,7 @@ Wasm::~Wasm() {
   }
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 bool PluginHandleSharedPtrThreadLocal::recover() {
   if (handle_ == nullptr || handle_->wasmHandle() == nullptr ||
       handle_->wasmHandle()->wasm() == nullptr) {
@@ -376,7 +376,7 @@ WasmEvent toWasmEvent(const std::shared_ptr<WasmHandleBase>& wasm) {
     return WasmEvent::ConfigureFailed;
   case FailState::RuntimeError:
     return WasmEvent::RuntimeError;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   case FailState::RecoverError:
     return WasmEvent::RecoverError;
 #endif

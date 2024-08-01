@@ -111,7 +111,7 @@ UpstreamRequest::UpstreamRequest(RouterFilterInterface& parent,
   auto upstream_host = conn_pool_->host();
   if (span_ != nullptr) {
     span_->injectContext(*parent_.downstreamHeaders(), upstream_host);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     if (upstream_host != nullptr && upstream_host->address() != nullptr &&
         upstream_host->address()->ip() != nullptr) {
       const std::string& address = upstream_host->address()->ip()->addressAsString();

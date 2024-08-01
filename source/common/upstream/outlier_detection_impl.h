@@ -166,7 +166,7 @@ public:
   void localOriginFailure();
   void localOriginNoFailure();
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   void forceEjectHost() override;
 #endif
   // handlers for setting and getting jitter, used to add a random value

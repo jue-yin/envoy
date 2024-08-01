@@ -421,7 +421,7 @@ const Buffer::Instance* ActiveStreamDecoderFilter::decodingBuffer() {
   return parent_.buffered_request_data_.get();
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void ActiveStreamDecoderFilter::modifyDecodingBuffer(
     std::function<void(Buffer::Instance&)> callback) {
   modifyDecodingBuffer(callback, false);
@@ -1549,7 +1549,7 @@ void ActiveStreamDecoderFilter::setDecoderBufferLimit(uint32_t limit) {
 
 uint32_t ActiveStreamDecoderFilter::decoderBufferLimit() { return parent_.buffer_limit_; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 bool ActiveStreamDecoderFilter::recreateStream(const ResponseHeaderMap* headers) {
   return recreateStream(headers, false);
 }
@@ -1580,7 +1580,7 @@ bool ActiveStreamDecoderFilter::recreateStream(const ResponseHeaderMap* headers)
     parent_.filter_manager_callbacks_.chargeStats(*headers);
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   parent_.filter_manager_callbacks_.recreateStream(parent_.streamInfo().filterState(),
                                                    use_original_request_body);
 #else

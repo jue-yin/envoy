@@ -233,7 +233,7 @@ envoy_cc_mock(
         "//test/mocks/upstream:cluster_priority_set_mocks",
         "//test/mocks/upstream:load_balancer_mocks",
     ],
-    alimesh_deps = [
+    higress_deps = [
         "//test/mocks/redis:redis_mocks",
     ],
 )

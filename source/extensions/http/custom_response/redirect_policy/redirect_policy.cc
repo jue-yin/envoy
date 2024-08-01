@@ -63,7 +63,7 @@ RedirectPolicy::RedirectPolicy(
                            ? std::make_unique<::Envoy::Http::Utility::RedirectConfig>(
                                  createRedirectConfig(config.redirect_action()))
                            : nullptr},
-#if defined(ALIMESH)
+#if defined(HIGRESS)
       use_original_request_uri_(
           PROTOBUF_GET_WRAPPED_OR_DEFAULT(config, use_original_request_uri, false)),
       keep_original_response_code_(
@@ -83,7 +83,7 @@ RedirectPolicy::RedirectPolicy(
       request_header_parser_(
           Envoy::Router::HeaderParser::configure(config.request_headers_to_add())),
       modify_request_headers_action_(createModifyRequestHeadersAction(config, context)) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   // Ensure that exactly one of uri_ or redirect_action_ or use_original_request_uri_ is specified.
   ASSERT(int(uri_ != nullptr) + int(redirect_action_ != nullptr) + int(use_original_request_uri_) ==
          1);
@@ -129,7 +129,7 @@ std::unique_ptr<ModifyRequestHeadersAction> RedirectPolicy::createModifyRequestH
   // the remote source and return.
   auto encoder_callbacks = custom_response_filter.encoderCallbacks();
   auto decoder_callbacks = custom_response_filter.decoderCallbacks();
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   auto* filter_state =
       encoder_callbacks->streamInfo()
           .filterState()
@@ -220,7 +220,7 @@ std::unique_ptr<ModifyRequestHeadersAction> RedirectPolicy::createModifyRequestH
       });
 
   ::Envoy::Http::Utility::Url absolute_url;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (use_original_request_uri_) {
     std::string real_original_host;
     const auto x_envoy_original_host = downstream_headers->getByKey(
@@ -258,7 +258,7 @@ std::unique_ptr<ModifyRequestHeadersAction> RedirectPolicy::createModifyRequestH
     path_and_query = path_and_query.substr(0, fragment_pos);
 
     downstream_headers->setPath(path_and_query);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   }
 #endif
   if (decoder_callbacks->downstreamCallbacks()) {
@@ -280,13 +280,13 @@ std::unique_ptr<ModifyRequestHeadersAction> RedirectPolicy::createModifyRequestH
     // redirect will take place.
     return ::Envoy::Http::FilterHeadersStatus::Continue;
   }
-#if !defined(ALIMESH)
+#if !defined(HIGRESS)
   downstream_headers->setMethod(::Envoy::Http::Headers::get().MethodValues.Get);
 #endif
   downstream_headers->remove(::Envoy::Http::Headers::get().ContentLength);
   // Cache the original response code.
   absl::optional<::Envoy::Http::Code> original_response_code;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (keep_original_response_code_) {
     absl::optional<uint64_t> current_code =
         ::Envoy::Http::Utility::getResponseStatusOrNullopt(headers);

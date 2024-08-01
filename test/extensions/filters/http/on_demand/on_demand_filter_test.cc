@@ -134,7 +134,7 @@ TEST_F(OnDemandFilterTest,
 TEST_F(OnDemandFilterTest, TestOnRouteConfigUpdateCompletionContinuesDecodingWithRedirectWithBody) {
   Buffer::OwnedImpl buffer;
   EXPECT_CALL(decoder_callbacks_, continueDecoding());
-#ifndef ALIMESH
+#ifndef HIGRESS
   EXPECT_CALL(decoder_callbacks_, decodingBuffer()).WillOnce(Return(&buffer));
 #endif
   filter_->onRouteConfigUpdateCompletion(true);
@@ -143,7 +143,7 @@ TEST_F(OnDemandFilterTest, TestOnRouteConfigUpdateCompletionContinuesDecodingWit
 // tests onRouteConfigUpdateCompletion() when ActiveStream recreation fails
 TEST_F(OnDemandFilterTest, OnRouteConfigUpdateCompletionContinuesDecodingIfRedirectFails) {
   EXPECT_CALL(decoder_callbacks_, continueDecoding());
-#ifndef ALIMESH
+#ifndef HIGRESS
   EXPECT_CALL(decoder_callbacks_, decodingBuffer()).WillOnce(Return(nullptr));
   EXPECT_CALL(decoder_callbacks_, recreateStream(_)).WillOnce(Return(false));
 #endif
@@ -152,7 +152,7 @@ TEST_F(OnDemandFilterTest, OnRouteConfigUpdateCompletionContinuesDecodingIfRedir
 
 // tests onRouteConfigUpdateCompletion() when route was resolved
 TEST_F(OnDemandFilterTest, OnRouteConfigUpdateCompletionRestartsActiveStream) {
-#ifndef ALIMESH
+#ifndef HIGRESS
   EXPECT_CALL(decoder_callbacks_, decodingBuffer()).WillOnce(Return(nullptr));
   EXPECT_CALL(decoder_callbacks_, recreateStream(_)).WillOnce(Return(true));
 #endif

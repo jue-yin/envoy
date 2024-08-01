@@ -39,7 +39,7 @@ public:
     filter_ = std::make_unique<CustomResponseFilter>(config_);
     filter_->setEncoderFilterCallbacks(encoder_callbacks_);
     filter_->setDecoderFilterCallbacks(decoder_callbacks_);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     ON_CALL(decoder_callbacks_, recreateStream(_)).WillByDefault(Return(true));
     ON_CALL(decoder_callbacks_, recreateStream(_, _)).WillByDefault(Return(true));
 #endif
@@ -95,7 +95,7 @@ TEST_F(CustomResponseFilterTest, RemoteData) {
   ::Envoy::Http::TestRequestHeaderMapImpl request_headers{};
   EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
             ::Envoy::Http::FilterHeadersStatus::Continue);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(decoder_callbacks_, recreateStream(_, false));
 #else
   EXPECT_CALL(decoder_callbacks_, recreateStream(_));
@@ -214,7 +214,7 @@ TEST_F(CustomResponseFilterTest, InvalidSchemeRedirect) {
       stats_store_.findCounterByString("stats.custom_response_invalid_uri").value().get().value());
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(CustomResponseFilterTest, SingleRedirectCustomStatus) {
   // Create config with invalid scheme field.
   createConfig(R"EOF(
@@ -250,7 +250,7 @@ TEST_F(CustomResponseFilterTest, SingleRedirectCustomStatus) {
   ::Envoy::Http::TestRequestHeaderMapImpl request_headers{{"Host", "example.foo"}};
   EXPECT_EQ(filter_->decodeHeaders(request_headers, false),
             ::Envoy::Http::FilterHeadersStatus::Continue);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(decoder_callbacks_, recreateStream(_, false));
 #else
   EXPECT_CALL(decoder_callbacks_, recreateStream(_));

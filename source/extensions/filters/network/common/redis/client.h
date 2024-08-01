@@ -7,7 +7,7 @@
 #include "source/extensions/filters/network/common/redis/codec_impl.h"
 #include "source/extensions/filters/network/common/redis/redis_command_stats.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "envoy/redis/async_client.h"
 #endif
 
@@ -18,7 +18,7 @@ namespace Common {
 namespace Redis {
 namespace Client {
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 using PoolRequest = Envoy::Redis::PoolRequest;
 #else
 /**

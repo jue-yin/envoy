@@ -111,7 +111,7 @@ public:
    */
   virtual double successRate(SuccessRateMonitorType type) const PURE;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual void forceEjectHost() PURE;
 #endif
 };

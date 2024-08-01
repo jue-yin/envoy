@@ -28,7 +28,7 @@ MockInternalRedirectPolicy::MockInternalRedirectPolicy() {
   ON_CALL(*this, enabled()).WillByDefault(Return(false));
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 MockInternalActiveRedirectPolicy::MockInternalActiveRedirectPolicy() {
   ON_CALL(*this, enabled()).WillByDefault(Return(false));
 }
@@ -120,7 +120,7 @@ MockRouteEntry::MockRouteEntry() {
   ON_CALL(*this, connectConfig()).WillByDefault(Invoke([this]() {
     return connect_config_.has_value() ? makeOptRef(connect_config_.value()) : absl::nullopt;
   }));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   ON_CALL(*this, internalActiveRedirectPolicy())
       .WillByDefault(ReturnRef(internal_active_redirect_policy_));
 #endif
@@ -173,7 +173,7 @@ MockRouteConfigProviderManager::~MockRouteConfigProviderManager() = default;
 
 MockScopedConfig::MockScopedConfig() {
   ON_CALL(*this, getRouteConfig(_)).WillByDefault(Return(route_config_));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   ON_CALL(*this, getRouteConfig(_, _, _)).WillByDefault(Return(route_config_));
 #endif
 }

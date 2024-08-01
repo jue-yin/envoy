@@ -36,7 +36,7 @@ public:
   PolicySharedPtr getPolicy(const ::Envoy::Http::ResponseHeaderMap& headers,
                             const StreamInfo::StreamInfo& stream_info) const;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool withRequestBody() const { return max_request_bytes_ > 0; }
   uint32_t maxRequestBytes() const { return max_request_bytes_; }
 #endif

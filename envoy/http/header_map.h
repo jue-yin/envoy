@@ -84,7 +84,7 @@ public:
   // Implicit conversion to absl::string_view.
   operator absl::string_view() const { return string_; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual ~LowerCaseString() = default;
 
 protected:

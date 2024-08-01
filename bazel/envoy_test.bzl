@@ -16,7 +16,7 @@ load(
     "envoy_select_force_libcpp",
     "envoy_stdlib_deps",
     "tcmalloc_external_dep",
-    "envoy_select_alimesh",
+    "envoy_select_higress",
 )
 
 # Envoy C++ related test infrastructure (that want gtest, gmock, but may be
@@ -73,7 +73,7 @@ def _envoy_test_linkopts():
         # TODO(mattklein123): It's not great that we universally link against the following libs.
         # In particular, -latomic and -lrt are not needed on all platforms. Make this more granular.
         "//conditions:default": ["-pthread", "-lrt", "-ldl"],
-    }) + envoy_select_force_libcpp([], ["-lstdc++fs", "-latomic"]) + envoy_select_alimesh(["-lcrypt"]) + envoy_dbg_linkopts() + envoy_select_exported_symbols(["-Wl,-E"])
+    }) + envoy_select_force_libcpp([], ["-lstdc++fs", "-latomic"]) + envoy_select_higress(["-lcrypt"]) + envoy_dbg_linkopts() + envoy_select_exported_symbols(["-Wl,-E"])
 
 # Envoy C++ fuzz test targets. These are not included in coverage runs.
 def envoy_cc_fuzz_test(
@@ -152,7 +152,7 @@ def envoy_cc_test(
         repository = "",
         external_deps = [],
         deps = [],
-        alimesh_deps = [],
+        higress_deps = [],
         tags = [],
         args = [],
         copts = [],
@@ -167,8 +167,8 @@ def envoy_cc_test(
     coverage_tags = tags + ([] if coverage else ["nocoverage"])
 
     deps = deps + select({
-        "@envoy//bazel:alimesh": [],
-        "//conditions:default": alimesh_deps,
+        "@envoy//bazel:higress": [],
+        "//conditions:default": higress_deps,
     })
 
     native.cc_test(
@@ -205,7 +205,7 @@ def envoy_cc_test_library(
         data = [],
         external_deps = [],
         deps = [],
-        alimesh_deps = [],
+        higress_deps = [],
         repository = "",
         tags = [],
         include_prefix = None,
@@ -214,8 +214,8 @@ def envoy_cc_test_library(
         **kargs):
 
     deps = deps + select({
-        "@envoy//bazel:alimesh": [],
-        "//conditions:default": alimesh_deps,
+        "@envoy//bazel:higress": [],
+        "//conditions:default": higress_deps,
     })
 
     disable_pch = kargs.pop("disable_pch", True)

@@ -35,7 +35,7 @@ envoy_cc_library(
     name = "config_lib",
     srcs = ["config_impl.cc"],
     hdrs = ["config_impl.h"],
-    alimesh_deps = [
+    higress_deps = [
         "//contrib/common/active_redirect/source:active_redirect_policy_lib",
     ],
     external_deps = ["abseil_optional"],
@@ -217,7 +217,7 @@ envoy_cc_library(
         "@envoy_api//envoy/config/route/v3:pkg_cc_proto",
         "@envoy_api//envoy/extensions/filters/network/http_connection_manager/v3:pkg_cc_proto",
     ],
-    alimesh_deps = [
+    higress_deps = [
         "//source/common/http:header_utility_lib",
     ],
 )
@@ -287,7 +287,7 @@ envoy_cc_library(
         "router.h",
         "upstream_request.h",
     ],
-    alimesh_deps = [
+    higress_deps = [
         "//envoy/stats:timespan_interface",
     ],
     deps = [

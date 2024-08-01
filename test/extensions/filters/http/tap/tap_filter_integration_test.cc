@@ -333,7 +333,7 @@ tap_config:
   admin_response_->waitForBodyData(1);
   envoy::data::tap::v3::TraceWrapper trace;
   TestUtility::loadFromYaml(admin_response_->body(), trace);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_EQ(trace.http_buffered_trace().request().headers().size(), 10);
   EXPECT_EQ(trace.http_buffered_trace().response().headers().size(), 7);
 #else
@@ -351,7 +351,7 @@ tap_config:
   // Wait for the tap message.
   admin_response_->waitForBodyData(1);
   TestUtility::loadFromYaml(admin_response_->body(), trace);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_EQ(trace.http_buffered_trace().request().headers().size(), 9);
   EXPECT_EQ(trace.http_buffered_trace().response().headers().size(), 8);
 #else

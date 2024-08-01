@@ -18,7 +18,7 @@ MockThreadLocalCluster::MockThreadLocalCluster() {
   ON_CALL(*this, tcpConnPool(_, _))
       .WillByDefault(Return(Upstream::TcpPoolData([]() {}, &tcp_conn_pool_)));
   ON_CALL(*this, httpAsyncClient()).WillByDefault(ReturnRef(async_client_));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   ON_CALL(*this, redisAsyncClient()).WillByDefault(ReturnRef(redis_async_client_));
 #endif
 }

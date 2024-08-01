@@ -404,7 +404,7 @@ struct StreamInfoImpl : public StreamInfo {
     return downstream_transport_failure_reason_;
   }
 
-#ifdef ALIMESH
+#ifdef HIGRESS
   void setCustomSpanTag(std::string_view key, std::string_view value) override {
     auto it = custom_span_tags_.find(key);
     if (it != custom_span_tags_.end()) {
@@ -475,7 +475,7 @@ private:
   BytesMeterSharedPtr downstream_bytes_meter_;
   bool is_shadow_{false};
   std::string downstream_transport_failure_reason_;
-#ifdef ALIMESH
+#ifdef HIGRESS
   absl::flat_hash_map<std::string, std::string> custom_span_tags_;
 #endif
 };

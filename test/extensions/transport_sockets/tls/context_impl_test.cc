@@ -1223,7 +1223,7 @@ TEST_F(ClientContextConfigImplTest, RSA2048Cert) {
   auto cleanup = cleanUpHelper(context);
 }
 
-#if !defined(ALIMESH)
+#if !defined(HIGRESS)
 // Validate that 1024-bit RSA certificates are rejected.
 TEST_F(ClientContextConfigImplTest, RSA1024Cert) {
   envoy::extensions::transport_sockets::tls::v3::UpstreamTlsContext tls_context;

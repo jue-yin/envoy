@@ -6,7 +6,7 @@
 
 #include "source/common/router/scoped_config_impl.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "source/common/network/address_impl.h"
 #include "test/mocks/stream_info/mocks.h"
 #endif
@@ -22,7 +22,7 @@ namespace {
 
 using ::Envoy::Http::TestRequestHeaderMapImpl;
 using ::testing::NiceMock;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 using ::testing::ReturnPointee;
 #endif
 
@@ -358,7 +358,7 @@ TEST(ScopeKeyBuilderImplTest, Parse) {
   EXPECT_EQ(key, nullptr);
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST(ScopeKeyBuilderImplTest, ParseHostAndPort) {
   std::string yaml_plain = R"EOF(
   fragments:

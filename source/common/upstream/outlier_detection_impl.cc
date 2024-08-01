@@ -65,7 +65,7 @@ void DetectorHostMonitorImpl::updateCurrentSuccessRateBucket() {
   local_origin_sr_monitor_.updateCurrentSuccessRateBucket();
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void DetectorHostMonitorImpl::forceEjectHost() {
   std::shared_ptr<DetectorImpl> detector = detector_.lock();
   if (!detector) {

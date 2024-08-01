@@ -210,7 +210,7 @@ struct ActiveStreamDecoderFilter : public ActiveStreamFilterBase,
   void continueDecoding() override;
   const Buffer::Instance* decodingBuffer() override;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   void modifyDecodingBuffer(std::function<void(Buffer::Instance&)> callback,
                             bool backup_for_replace) override;
 #endif
@@ -236,7 +236,7 @@ struct ActiveStreamDecoderFilter : public ActiveStreamFilterBase,
   removeDownstreamWatermarkCallbacks(DownstreamWatermarkCallbacks& watermark_callbacks) override;
   void setDecoderBufferLimit(uint32_t limit) override;
   uint32_t decoderBufferLimit() override;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool recreateStream(const Http::ResponseHeaderMap* original_response_headers,
                       bool use_original_request_body) override;
 #endif
@@ -248,7 +248,7 @@ struct ActiveStreamDecoderFilter : public ActiveStreamFilterBase,
   Buffer::BufferMemoryAccountSharedPtr account() const override;
   void setUpstreamOverrideHost(absl::string_view host) override;
   absl::optional<absl::string_view> upstreamOverrideHost() const override;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool needBuffering() const override { return need_buffering_; }
   void setNeedBuffering(bool need) override { need_buffering_ = need; }
 #endif
@@ -266,7 +266,7 @@ struct ActiveStreamDecoderFilter : public ActiveStreamFilterBase,
 
   StreamDecoderFilterSharedPtr handle_;
   bool is_grpc_request_{};
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool need_buffering_{};
 #endif
 };
@@ -466,7 +466,7 @@ public:
   /**
    * Called when the stream should be re-created, e.g. for an internal redirect.
    */
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   virtual void recreateStream(StreamInfo::FilterStateSharedPtr filter_state,
                               bool /* use_original_request_body */) {
     recreateStream(filter_state);
@@ -837,7 +837,7 @@ public:
 
   Buffer::InstancePtr& bufferedRequestData() { return buffered_request_data_; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Buffer::InstancePtr& originalBufferedRequestData() { return original_buffered_request_data_; }
 #endif
 
@@ -1023,7 +1023,7 @@ private:
   std::unique_ptr<MetadataMapVector> request_metadata_map_vector_;
   Buffer::InstancePtr buffered_response_data_;
   Buffer::InstancePtr buffered_request_data_;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Buffer::InstancePtr original_buffered_request_data_;
 #endif
   uint32_t buffer_limit_{0};

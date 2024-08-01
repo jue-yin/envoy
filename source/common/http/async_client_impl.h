@@ -324,7 +324,7 @@ private:
 
     const ConnectConfigOptRef connectConfig() const override { return connect_config_nullopt_; }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     const Router::InternalActiveRedirectPolicy& internalActiveRedirectPolicy() const override {
       return internal_active_redirect_policy_;
     }
@@ -349,7 +349,7 @@ private:
     static const std::multimap<std::string, std::string> opaque_config_;
     static const NullPathMatchCriterion path_match_criterion_;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     static const Router::InternalActiveRedirectPoliciesImpl internal_active_redirect_policy_;
 #endif
 

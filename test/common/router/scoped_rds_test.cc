@@ -18,7 +18,7 @@
 #include "source/common/protobuf/message_validator_impl.h"
 #include "source/common/router/scoped_rds.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "source/common/network/address_impl.h"
 #include "test/mocks/stream_info/mocks.h"
 #endif
@@ -46,7 +46,7 @@ using testing::IsNull;
 using testing::NiceMock;
 using testing::Return;
 using testing::ReturnRef;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 using testing::ReturnPointee;
 #endif
 
@@ -339,7 +339,7 @@ dynamic_scoped_route_configs:
 
 class ScopedRdsTest : public ScopedRoutesTestBase {
 protected:
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   void setupHostScope(const OptionalHttpFilters optional_http_filters = OptionalHttpFilters()) {
     ON_CALL(server_factory_context_.cluster_manager_, adsMux())
         .WillByDefault(Return(std::make_shared<::Envoy::Config::NullGrpcMuxImpl>()));
@@ -1916,7 +1916,7 @@ key:
   EXPECT_EQ(config->name(), "foo_routes");
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(ScopedRdsTest, HostScopeMultipleResourcesSotw) {
   setupHostScope();
 

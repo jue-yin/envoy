@@ -34,7 +34,7 @@ using PolicySharedPtr = std::shared_ptr<const Policy>;
 struct CustomResponseFilterState : public std::enable_shared_from_this<CustomResponseFilterState>,
                                    public StreamInfo::FilterState::Object {
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   CustomResponseFilterState(PolicySharedPtr a_policy, absl::optional<::Envoy::Http::Code> code,
                             int32_t max_redirect_times)
       : policy(a_policy), original_response_code(code), remain_redirect_times(max_redirect_times) {}
@@ -45,7 +45,7 @@ struct CustomResponseFilterState : public std::enable_shared_from_this<CustomRes
 
   PolicySharedPtr policy;
   absl::optional<::Envoy::Http::Code> original_response_code;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   int32_t remain_redirect_times;
 #endif
   static constexpr absl::string_view kFilterStateName = "envoy.filters.http.custom_response";

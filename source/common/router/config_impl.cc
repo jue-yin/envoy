@@ -525,7 +525,7 @@ RouteEntryImplBase::RouteEntryImplBase(const CommonVirtualHostSharedPtr& vhost,
           vhost_->globalRouteConfig().maxDirectResponseBodySizeBytes())),
       per_filter_configs_(route.typed_per_filter_config(), optional_http_filters, factory_context,
                           validator),
-#if !defined(ALIMESH)
+#if !defined(HIGRESS)
       route_name_(route.name()), time_source_(factory_context.mainThreadDispatcher().timeSource()),
 #else
       route_name_(route.name()), time_source_(factory_context.mainThreadDispatcher().timeSource()),
@@ -606,7 +606,7 @@ RouteEntryImplBase::RouteEntryImplBase(const CommonVirtualHostSharedPtr& vhost,
     weighted_clusters_config_ = std::make_unique<WeightedClustersConfig>(
         weighted_clusters, total_weight, route.route().weighted_clusters().header_name());
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     if (route.route().weighted_clusters().has_inline_cluster_specifier_plugin()) {
       cluster_specifier_plugin_ = getClusterSpecifierPluginByTheProto(
           route.route().weighted_clusters().inline_cluster_specifier_plugin(), validator,
@@ -880,7 +880,7 @@ void RouteEntryImplBase::finalizeRequestHeaders(Http::RequestHeaderMap& headers,
   absl::optional<std::string> container;
   if (!getPathRewrite(headers, container).empty() || regex_rewrite_ != nullptr ||
       path_rewriter_ != nullptr) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     // We need to store the original path of access log when user enable the suppress_envoy_headers
     // option.
     if (!insert_envoy_original_path) {
@@ -1146,7 +1146,7 @@ std::unique_ptr<InternalRedirectPolicyImpl> RouteEntryImplBase::buildInternalRed
   return std::make_unique<InternalRedirectPolicyImpl>(policy_config, validator, current_route_name);
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 std::unique_ptr<InternalActiveRedirectPoliciesImpl>
 RouteEntryImplBase::buildActiveInternalRedirectPolicy(
     const envoy::config::route::v3::RouteAction& route_config,
@@ -1381,7 +1381,7 @@ RouteConstSharedPtr RouteEntryImplBase::pickWeightedCluster(const Http::HeaderMa
     }
 
     if (selected_value >= begin && selected_value < end) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
       if (cluster_specifier_plugin_ != nullptr) {
         auto request_header = dynamic_cast<const Http::RequestHeaderMap*>(&headers);
         if (!cluster->clusterHeaderName().get().empty() &&
@@ -1883,7 +1883,7 @@ VirtualHostImpl::VirtualHostImpl(
     }
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   for (const auto& server_name : virtual_host.allow_server_names()) {
     auto isWildcardServerName = absl::StartsWith(server_name, "*.");
     if (absl::StrContains(server_name, '*') && !isWildcardServerName) {
@@ -1903,7 +1903,7 @@ VirtualHostImpl::VirtualHostImpl(
 const std::shared_ptr<const SslRedirectRoute> VirtualHostImpl::SSL_REDIRECT_ROUTE{
     new SslRedirectRoute()};
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 const SslPermanentRedirector SslPermanentRedirectRoute::SSL_PERMANENT_REDIRECTOR;
 const std::shared_ptr<const SslPermanentRedirectRoute>
     VirtualHostImpl::SSL_PERMANENT_REDIRECT_ROUTE{new SslPermanentRedirectRoute};
@@ -1969,7 +1969,7 @@ RouteConstSharedPtr VirtualHostImpl::getRouteFromEntries(const RouteCallback& cb
     return nullptr;
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   // First check for sni redirect.
   if (allow_server_names_.empty()) {
     goto SNI_CHECK_PASS;

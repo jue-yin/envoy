@@ -2750,7 +2750,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSessionTrace) {
 TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteNotFound) {
   setup(false, "", true, true);
   setupFilterChain(1, 0); // Recreate the chain for second stream.
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
                   scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
               getRouteConfig(_, _, _))
@@ -2793,7 +2793,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteNotFound) {
 TEST_F(HttpConnectionManagerImplTest, TestSrdsUpdate) {
   setup(false, "", true, true);
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
                   scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
               getRouteConfig(_, _, _))
@@ -2867,7 +2867,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsCrossScopeReroute) {
   std::shared_ptr<Router::MockRoute> route2 = std::make_shared<NiceMock<Router::MockRoute>>();
   EXPECT_CALL(*route_config1, route(_, _, _, _)).WillRepeatedly(Return(route1));
   EXPECT_CALL(*route_config2, route(_, _, _, _)).WillRepeatedly(Return(route2));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
                   scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
               getRouteConfig(_, _, _))
@@ -2957,7 +2957,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteFound) {
   std::shared_ptr<Upstream::MockThreadLocalCluster> fake_cluster1 =
       std::make_shared<NiceMock<Upstream::MockThreadLocalCluster>>();
   EXPECT_CALL(cluster_manager_, getThreadLocalCluster(_)).WillOnce(Return(fake_cluster1.get()));
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   EXPECT_CALL(*scopedRouteConfigProvider()->config<Router::MockScopedConfig>(),
               getRouteConfig(_, _, _))
       // 1. decodeHeaders() snapping route config.

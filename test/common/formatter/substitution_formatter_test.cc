@@ -913,7 +913,7 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
     }
 
 // The test environment does not support IPV6
-#if !defined(ALIMESH)
+#if !defined(HIGRESS)
     // Validate for IPv6 address
     address =
         Network::Address::InstanceConstSharedPtr{new Network::Address::Ipv6Instance("::1", 9443)};

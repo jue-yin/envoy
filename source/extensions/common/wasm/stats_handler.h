@@ -31,7 +31,7 @@ struct CreateWasmStats {
   CREATE_WASM_STATS(GENERATE_COUNTER_STRUCT, GENERATE_GAUGE_STRUCT)
 };
 
-#ifdef ALIMESH
+#ifdef HIGRESS
 #define LIFECYCLE_STATS(COUNTER, GAUGE, PLUGIN_COUNTER, PLUGIN_GAUGE)                              \
   COUNTER(created)                                                                                 \
   GAUGE(active, NeverImport)                                                                       \
@@ -46,7 +46,7 @@ struct CreateWasmStats {
 #endif
 
 struct LifecycleStats {
-#ifdef ALIMESH
+#ifdef HIGRESS
   LIFECYCLE_STATS(GENERATE_COUNTER_STRUCT, GENERATE_GAUGE_STRUCT, GENERATE_COUNTER_STRUCT,
                   GENERATE_GAUGE_STRUCT)
 #else
@@ -72,7 +72,7 @@ enum class WasmEvent : int {
   RuntimeError,
   VmCreated,
   VmShutDown,
-#ifdef ALIMESH
+#ifdef HIGRESS
   RecoverError,
 #endif
 };
@@ -107,7 +107,7 @@ CreateStatsHandler& getCreateStatsHandler();
 
 class LifecycleStatsHandler {
 public:
-#ifdef ALIMESH
+#ifdef HIGRESS
   LifecycleStatsHandler(const Stats::ScopeSharedPtr& scope, std::string runtime,
                         std::string plugin_name)
       : lifecycle_stats_(LifecycleStats{LIFECYCLE_STATS(
@@ -128,13 +128,13 @@ public:
   void onEvent(WasmEvent event);
   static int64_t getActiveVmCount();
 
-#ifdef ALIMESH
+#ifdef HIGRESS
   LifecycleStats& stats() { return lifecycle_stats_; }
 #endif
 
 protected:
   LifecycleStats lifecycle_stats_;
-#ifdef ALIMESH
+#ifdef HIGRESS
   bool is_crashed_ = false;
 #endif
 };

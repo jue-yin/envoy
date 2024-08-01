@@ -549,7 +549,7 @@ void DecoderImpl::parseSlice(const Buffer::RawSlice& slice) {
   }
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void RawDecoderImpl::decode(Buffer::Instance& data) {
   for (const Buffer::RawSlice& slice : data.getRawSlices()) {
     parseSlice(slice);
@@ -883,7 +883,7 @@ void EncoderImpl::encodeSimpleString(const std::string& string, Buffer::Instance
   out.add(string);
   out.add("\r\n", 2);
 }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void RawEncoderImpl::encode(std::string_view value, Buffer::Instance& out) { out.add(value); }
 #endif
 

@@ -103,7 +103,7 @@ TEST_P(WasmCommonTest, WasmFailState) {
   envoy::extensions::wasm::v3::PluginConfig plugin_config;
   auto plugin = std::make_shared<Extensions::Common::Wasm::Plugin>(
       plugin_config, envoy::config::core::v3::TrafficDirection::UNSPECIFIED, local_info, nullptr);
-#ifdef ALIMESH
+#ifdef HIGRESS
   // auto wasm = std::make_shared<WasmHandle>(
   //     std::make_unique<Wasm>(plugin->wasmConfig(), "", scope, *api, cluster_manager, *dispatcher),
   //     *dispatcher);
@@ -203,7 +203,7 @@ TEST_P(WasmCommonTest, Logging) {
       [](Wasm*, const std::shared_ptr<Plugin>&) -> ContextBase* { return nullptr; });
   EXPECT_EQ(std::unique_ptr<ContextBase>(wasm->createContext(plugin)), nullptr);
   auto wasm_weak = std::weak_ptr<Extensions::Common::Wasm::Wasm>(wasm);
-#ifdef ALIMESH
+#ifdef HIGRESS
   // auto wasm_handle =
   //     std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm), *dispatcher);
   auto wasm_handle = std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm));
@@ -717,7 +717,7 @@ TEST_P(WasmCommonTest, VmCache) {
               EXPECT_CALL(*root_context, log_(spdlog::level::info, Eq("on_delete logging")));
               return root_context;
             });
-#ifdef ALIMESH
+#ifdef HIGRESS
         // return std::make_shared<WasmHandle>(wasm, *dispatcher);
         return std::make_shared<WasmHandle>(wasm);
 #else
@@ -839,7 +839,7 @@ TEST_P(WasmCommonTest, RemoteCode) {
               EXPECT_CALL(*root_context, log_(spdlog::level::info, Eq("on_delete logging")));
               return root_context;
             });
-#ifdef ALIMESH
+#ifdef HIGRESS
         return std::make_shared<WasmHandle>(wasm);
         // return std::make_shared<WasmHandle>(wasm, *dispatcher);
 #else
@@ -965,7 +965,7 @@ TEST_P(WasmCommonTest, RemoteCodeMultipleRetry) {
               EXPECT_CALL(*root_context, log_(spdlog::level::info, Eq("on_delete logging")));
               return root_context;
             });
-#ifdef ALIMESH
+#ifdef HIGRESS
         return std::make_shared<WasmHandle>(wasm);
         // return std::make_shared<WasmHandle>(wasm, *dispatcher);
 #else
@@ -1301,7 +1301,7 @@ TEST_P(WasmCommonTest, ThreadLocalCopyRetainsEnforcement) {
   EXPECT_TRUE(wasm->load(code, false));
   EXPECT_TRUE(wasm->initialize());
 
-#ifdef ALIMESH
+#ifdef HIGRESS
   // auto wasm_handle =
   //     std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm), *dispatcher);
   auto wasm_handle = std::make_shared<Extensions::Common::Wasm::WasmHandle>(std::move(wasm));

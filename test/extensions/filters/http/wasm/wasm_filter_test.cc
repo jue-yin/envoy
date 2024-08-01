@@ -528,7 +528,7 @@ TEST_P(WasmHttpFilterTest, BodyRequestReplaceBufferedBody) {
   filter().onDestroy();
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 // Script that replaces the batched buffered body.
 TEST_P(WasmHttpFilterTest, BodyRequestReplaceBatchedBufferedBody) {
   setupTest("body");
@@ -755,7 +755,7 @@ TEST_P(WasmHttpFilterTest, AccessLogCreate) {
                AccessLog::AccessLogType::NotSet);
   filter().onDestroy();
 }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_P(WasmHttpFilterTest, RedisCall) {
   if (std::get<1>(GetParam()) == "rust") {
     // This feature is not supported in rust
@@ -1832,7 +1832,7 @@ TEST_P(WasmHttpFilterTest, GrpcStreamOpenAtShutdown) {
   }
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_P(WasmHttpFilterTest, GetRouteName) {
   if (std::get<1>(GetParam()) == "rust") {
     return;

@@ -1384,7 +1384,7 @@ TEST_F(HttpConnectionManagerImplTest, DateHeaderPresent) {
   doRemoteClose();
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 TEST_F(HttpConnectionManagerImplTest, KeepaliveHeaderNotAppend) {
   setup(false, "");
   setUpEncoderAndDecoder(false, false);

@@ -243,7 +243,7 @@ TEST_F(ContextTest, FindValueTest) {
   EXPECT_FALSE(ctx_.FindValue("plugin_name", &arena).has_value());
 }
 
-#ifdef ALIMESH
+#ifdef HIGRESS
 TEST_F(ContextTest, SetCustomSpanTagTest) {
   Http::MockStreamDecoderFilterCallbacks decoder_callbacks;
   Envoy::StreamInfo::MockStreamInfo decoder_si;

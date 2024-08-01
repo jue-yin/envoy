@@ -64,7 +64,7 @@ private:
   std::forward_list<PendingValue> pending_value_stack_;
 };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RawDecoderImpl : public Decoder, Logger::Loggable<Logger::Id::redis> {
 public:
   RawDecoderImpl(RawDecoderCallbacks& callbacks) : callbacks_(callbacks) {}
@@ -122,7 +122,7 @@ public:
     return DecoderPtr{new DecoderImpl(callbacks)};
   }
 };
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RawDecoderFactoryImpl : public RawDecoderFactory {
 public:
   // RedisProxy::RawDecoderFactory
@@ -147,7 +147,7 @@ private:
   void encodeInteger(int64_t integer, Buffer::Instance& out);
   void encodeSimpleString(const std::string& string, Buffer::Instance& out);
 };
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RawEncoderImpl : public RawEncoder {
 public:
   // RedisProxy::RawEncoder

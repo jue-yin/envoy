@@ -56,7 +56,7 @@ public:
   const Http::LowerCaseString EnvoyAuthHeadersToRemove{
       absl::StrCat(prefix(), "-auth-headers-to-remove")};
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   const Http::LowerCaseString XMseExternalAuthzCheckResult{"x-mse-external-authz-check-result"};
 #endif
   const Http::LowerCaseString EnvoyAuthFailureModeAllowed{

@@ -426,7 +426,7 @@ TEST_F(RedisEncoderDecoderImplTest, InvalidBulkStringExpectLF) {
   buffer_.add("$1\r\na\ra");
   EXPECT_THROW(decoder_.decode(buffer_), ProtocolError);
 }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RedisRawEncoderDecoderImplTest : public testing::Test, RawDecoderCallbacks {
 public:
   RedisRawEncoderDecoderImplTest() : decoder_(*this) {}

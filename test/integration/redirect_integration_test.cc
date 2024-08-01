@@ -225,7 +225,7 @@ TEST_P(RedirectIntegrationTest, BasicInternalRedirectDownstreamBytesCount) {
 
   ASSERT_TRUE(response->waitForEndStream());
   ASSERT_TRUE(response->complete());
-#ifdef ALIMESH
+#ifdef HIGRESS
   expectDownstreamBytesSentAndReceived(BytesCountExpectation(223, 63, 204, 31),
                                        BytesCountExpectation(136, 42, 136, 42),
 #else
@@ -262,7 +262,7 @@ TEST_P(RedirectIntegrationTest, BasicInternalRedirectUpstreamBytesCount) {
   ASSERT_TRUE(response->waitForEndStream());
   ASSERT_TRUE(response->complete());
   BytesCountExpectation http2_expected = (GetParam().http2_implementation == Http2Impl::Oghttp2)
-#ifdef ALIMESH
+#ifdef HIGRESS
                                              ? BytesCountExpectation(189, 59, 189, 59)
                                              : BytesCountExpectation(189, 64, 189, 64);
 #else
@@ -270,7 +270,7 @@ TEST_P(RedirectIntegrationTest, BasicInternalRedirectUpstreamBytesCount) {
                                              : BytesCountExpectation(137, 64, 137, 64);
 #endif
 
-#ifdef ALIMESH
+#ifdef HIGRESS
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(267, 110, 236, 85), http2_expected,
                                      BytesCountExpectation(137, 64, 137, 64), 0);
   expectUpstreamBytesSentAndReceived(BytesCountExpectation(302, 38, 277, 18),

@@ -36,7 +36,7 @@ public:
   MOCK_METHOD(void, successRate,
               (DetectorHostMonitor::SuccessRateMonitorType type, double new_success_rate));
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   MOCK_METHOD(void, forceEjectHost, ());
 #endif
 };

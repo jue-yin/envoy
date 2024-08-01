@@ -42,7 +42,7 @@
 #include "source/common/stream_info/uint32_accessor_impl.h"
 #include "source/common/tracing/http_tracer_impl.h"
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 #include "source/common/http/path_utility.h"
 #endif
 
@@ -319,7 +319,7 @@ Stats::StatName Filter::upstreamZone(Upstream::HostDescriptionConstSharedPtr ups
   return upstream_host ? upstream_host->localityZoneStatName() : config_.empty_stat_name_;
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 void Filter::chargeUpstreamGrpcCode(uint64_t http_status_code, uint64_t grpc_response_code,
                                     const Http::ResponseHeaderMap& response_headers,
                                     Upstream::HostDescriptionConstSharedPtr upstream_host,
@@ -720,7 +720,7 @@ Http::FilterHeadersStatus Filter::decodeHeaders(Http::RequestHeaderMap& headers,
   }
   callbacks_->streamInfo().setAttemptCount(attempt_count_);
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   Http::HeaderString start_time;
   start_time.setInteger(std::chrono::duration_cast<std::chrono::milliseconds>(
                             callbacks_->streamInfo().startTime().time_since_epoch())
@@ -871,7 +871,7 @@ Http::FilterDataStatus Filter::decodeData(Buffer::Instance& data, bool end_strea
   // a backoff timer.
   ASSERT(upstream_requests_.size() <= 1);
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   bool buffering = (retry_state_ && retry_state_->enabled()) || callbacks_->needBuffering() ||
                    (!active_shadow_policies_.empty() && !streaming_shadows_) ||
                    (route_entry_ && route_entry_->internalRedirectPolicy().enabled());
@@ -1529,7 +1529,7 @@ void Filter::onUpstreamHeaders(uint64_t response_code, Http::ResponseHeaderMapPt
     upstream_request.upstreamHost()->outlierDetector().putHttpResponseCode(response_code);
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   static Envoy::Http::LowerCaseString shutdown_key("micro.service.shutdown.endpoint");
   if (!headers->get(shutdown_key).empty()) {
     upstream_request.upstreamHost()->outlierDetector().forceEjectHost();
@@ -1599,7 +1599,7 @@ void Filter::onUpstreamHeaders(uint64_t response_code, Http::ResponseHeaderMapPt
     // next downstream.
   }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (route_entry_->internalActiveRedirectPolicy().enabled() &&
       route_entry_->internalActiveRedirectPolicy().shouldRedirectForResponseCode(
           static_cast<Http::Code>(response_code)) &&
@@ -1638,7 +1638,7 @@ void Filter::onUpstreamHeaders(uint64_t response_code, Http::ResponseHeaderMapPt
     MonotonicTime response_received_time = dispatcher.timeSource().monotonicTime();
     std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         response_received_time - downstream_request_complete_time_);
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     std::chrono::milliseconds duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         response_received_time - callbacks_->streamInfo().startTimeMonotonic());
     Http::HeaderString cost_time;
@@ -1674,7 +1674,7 @@ void Filter::onUpstreamHeaders(uint64_t response_code, Http::ResponseHeaderMapPt
   upstream_request.upstreamCanary(
       (headers->EnvoyUpstreamCanary() && headers->EnvoyUpstreamCanary()->value() == "true") ||
       upstream_request.upstreamHost()->canary());
-#if defined(ALIMESH)
+#if defined(HIGRESS)
   if (grpc_status.has_value()) {
     chargeUpstreamGrpcCode(response_code, grpc_to_http_status, *headers,
                            upstream_request.upstreamHost(), false);
@@ -1974,7 +1974,7 @@ bool Filter::convertRequestHeadersForInternalRedirect(Http::RequestHeaderMap& do
   return true;
 }
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 bool Filter::setupActiveRedirect(const Http::ResponseHeaderMap&, UpstreamRequest&) {
   ENVOY_STREAM_LOG(debug, "attempting internal active redirect", *callbacks_);
 

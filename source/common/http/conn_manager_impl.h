@@ -285,7 +285,7 @@ private:
     }
     void disarmRequestTimeout() override;
     void resetIdleTimer() override;
-#if defined(ALIMESH)
+#if defined(HIGRESS)
     void recreateStream(StreamInfo::FilterStateSharedPtr filter_state,
                         bool backup_for_replace) override;
 #endif

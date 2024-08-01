@@ -165,7 +165,7 @@ public:
   virtual void onRespValue(RespValuePtr&& value) PURE;
 };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RawDecoderCallbacks {
 public:
   virtual ~RawDecoderCallbacks() = default;
@@ -204,7 +204,7 @@ public:
   virtual DecoderPtr create(DecoderCallbacks& callbacks) PURE;
 };
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RawDecoderFactory {
 public:
   virtual ~RawDecoderFactory() = default;
@@ -230,7 +230,7 @@ public:
 
 using EncoderPtr = std::unique_ptr<Encoder>;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 class RawEncoder {
 public:
   virtual ~RawEncoder() = default;

@@ -37,7 +37,7 @@ RespValuePtr makeError(const std::string& error) {
   response->asString() = error;
   return response;
 }
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 std::string makeRawError(const std::string& error) {
   std::string result;
   result.append(fmt::format("-{}\r\n", error));

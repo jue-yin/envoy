@@ -37,7 +37,7 @@ proxy_wasm::LogLevel EnvoyWasmVmIntegration::getLogLevel() {
 }
 
 void EnvoyWasmVmIntegration::error(std::string_view message) {
-#ifdef ALIMESH
+#ifdef HIGRESS
   ENVOY_LOG(error, absl::StrReplaceAll(message, {{"\n", "\\n"}}));
 #else
   ENVOY_LOG(error, message);
