@@ -1,10 +1,7 @@
-date: October 16, 2023
+date: June 28, 2024
 
 bug_fixes:
-- area: tracing
-  change: |
-    Fixed a bug in the Datadog tracer where Datadog's "operation name" field would contain what should be in the "resource name" field.
 - area: http
   change: |
-    Fixed a bug where processing of deferred streams with the value of ``http.max_requests_per_io_cycle`` more than 1,
-    can cause a crash.
+    Fixed a bug where additional :ref:`cookie attributes <envoy_v3_api_msg_config.route.v3.RouteAction.HashPolicy.cookie>`
+    are not sent properly to clients.

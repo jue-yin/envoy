@@ -33,6 +33,7 @@ RUNTIME_GUARD(envoy_reloadable_features_allow_absolute_url_with_mixed_scheme);
 RUNTIME_GUARD(envoy_reloadable_features_allow_compact_maglev);
 RUNTIME_GUARD(envoy_reloadable_features_append_query_parameters_path_rewriter);
 RUNTIME_GUARD(envoy_reloadable_features_append_xfh_idempotent);
+RUNTIME_GUARD(envoy_reloadable_features_check_switch_protocol_websocket_handshake);
 RUNTIME_GUARD(envoy_reloadable_features_conn_pool_delete_when_idle);
 RUNTIME_GUARD(envoy_reloadable_features_count_unused_mapped_pages_as_free);
 RUNTIME_GUARD(envoy_reloadable_features_dfp_mixed_scheme);
@@ -47,6 +48,7 @@ RUNTIME_GUARD(envoy_reloadable_features_format_ports_as_numbers);
 RUNTIME_GUARD(envoy_reloadable_features_handle_uppercase_scheme);
 RUNTIME_GUARD(envoy_reloadable_features_http1_allow_codec_error_response_after_1xx_headers);
 RUNTIME_GUARD(envoy_reloadable_features_http2_decode_metadata_with_quiche);
+RUNTIME_GUARD(envoy_reloadable_features_http2_discard_host_header);
 RUNTIME_GUARD(envoy_reloadable_features_http2_validate_authority_with_quiche);
 RUNTIME_GUARD(envoy_reloadable_features_http_allow_partial_urls_in_referer);
 RUNTIME_GUARD(envoy_reloadable_features_http_ext_auth_failure_mode_allow_header_add);
@@ -71,6 +73,7 @@ RUNTIME_GUARD(envoy_reloadable_features_quic_defer_logging_to_ack_listener);
 RUNTIME_GUARD(envoy_reloadable_features_reject_require_client_certificate_with_quic);
 RUNTIME_GUARD(envoy_reloadable_features_sanitize_original_path);
 RUNTIME_GUARD(envoy_reloadable_features_send_header_raw_value);
+RUNTIME_GUARD(envoy_reloadable_features_send_local_reply_when_no_buffer_and_upstream_request);
 RUNTIME_GUARD(envoy_reloadable_features_service_sanitize_non_utf8_strings);
 RUNTIME_GUARD(envoy_reloadable_features_skip_dns_lookup_for_proxied_requests);
 RUNTIME_GUARD(envoy_reloadable_features_stateful_session_encode_ttl_in_cookie);
@@ -121,6 +124,10 @@ FALSE_RUNTIME_GUARD(envoy_reloadable_features_enable_include_histograms);
 FALSE_RUNTIME_GUARD(envoy_reloadable_features_refresh_rtt_after_request);
 // TODO(danzh) false deprecate it once QUICHE has its own enable/disable flag.
 FALSE_RUNTIME_GUARD(envoy_reloadable_features_quic_reject_all);
+
+// A flag to set the maximum TLS version for google_grpc client to TLS1.2, when needed for
+// compliance restrictions.
+FALSE_RUNTIME_GUARD(envoy_reloadable_features_google_grpc_disable_tls_13);
 
 // Block of non-boolean flags. Use of int flags is deprecated. Do not add more.
 ABSL_FLAG(uint64_t, re2_max_program_size_error_level, 100, ""); // NOLINT

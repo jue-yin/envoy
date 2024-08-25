@@ -1812,6 +1812,11 @@ ConnectionImpl::Http2Options::Http2Options(
   // on this mitigation, set back to the old 10K number to avoid any changes in the HTTP/2 codec
   // behavior.
   nghttp2_option_set_max_outbound_ack(options_, 10000);
+
+  // nghttp2 REQUIRES setting max number of CONTINUATION frames.
+  // 1024 is chosen to accommodate Envoy's 8Mb max limit of max_request_headers_kb
+  // in both headers and trailers
+  nghttp2_option_set_max_continuations(options_, 1024);
 }
 
 ConnectionImpl::Http2Options::~Http2Options() { nghttp2_option_del(options_); }
@@ -1826,6 +1831,11 @@ ConnectionImpl::ClientHttp2Options::ClientHttp2Options(
   // TODO(PiotrSikora): remove this once multiple upstream connections or queuing are implemented.
   nghttp2_option_set_peer_max_concurrent_streams(
       options_, ::Envoy::Http2::Utility::OptionsLimits::DEFAULT_MAX_CONCURRENT_STREAMS);
+
+  // nghttp2 REQUIRES setting max number of CONTINUATION frames.
+  // 1024 is chosen to accommodate Envoy's 8Mb max limit of max_request_headers_kb
+  // in both headers and trailers
+  nghttp2_option_set_max_continuations(options_, 1024);
 }
 
 void ConnectionImpl::dumpState(std::ostream& os, int indent_level) const {
@@ -2110,6 +2120,18 @@ int ServerConnectionImpl::onHeader(const nghttp2_frame* frame, HeaderString&& na
   // For a server connection, we should never get push promise frames.
   ASSERT(frame->hd.type == NGHTTP2_HEADERS);
   ASSERT(frame->headers.cat == NGHTTP2_HCAT_REQUEST || frame->headers.cat == NGHTTP2_HCAT_HEADERS);
+  if (Runtime::runtimeFeatureEnabled("envoy.reloadable_features.http2_discard_host_header")) {
+    StreamImpl* stream = getStreamUnchecked(frame->hd.stream_id);
+    if (stream && name == static_cast<absl::string_view>(Http::Headers::get().HostLegacy)) {
+      // Check if there is already the :authority header
+      const auto result = stream->headers().get(Http::Headers::get().Host);
+      if (!result.empty()) {
+        // Discard the host header value
+        return 0;
+      }
+      // Otherwise use host value as :authority
+    }
+  }
   return saveHeader(frame, std::move(name), std::move(value));
 }
 

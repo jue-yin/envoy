@@ -3,7 +3,7 @@
 # directory:coverage_percent
 # for existing directories with low coverage.
 declare -a KNOWN_LOW_COVERAGE=(
-"source/common:96.2"
+"source/common:96.1"
 "source/common/api:84.5"
 "source/common/api/posix:81.8"
 "source/common/config:94.8"
@@ -11,6 +11,7 @@ declare -a KNOWN_LOW_COVERAGE=(
 "source/common/event:95.1" # Emulated edge events guards don't report LCOV
 "source/common/filesystem/posix:96.2" # FileReadToEndNotReadable fails in some env; createPath can't test all failure branches.
 "source/common/http/http2:95.2"
+"source/common/io:6.7"
 "source/common/json:93.7"
 "source/common/matcher:94.6"
 "source/common/network:94.4" # Flaky, `activateFileEvents`, `startSecureTransport` and `ioctl`, listener_socket do not always report LCOV
@@ -28,6 +29,7 @@ declare -a KNOWN_LOW_COVERAGE=(
 "source/extensions/access_loggers/wasm:93.5"
 "source/extensions/clusters/common:91.5" # This can be increased again once `#24903` lands
 "source/extensions/common:93.0" #flaky: be careful adjusting
+"source/extensions/common/proxy_protocol:93.8" # Adjusted for security patch
 "source/extensions/common/tap:94.2"
 "source/extensions/common/wasm:87.5" # flaky: be careful adjusting
 "source/extensions/common/wasm/ext:92.0"

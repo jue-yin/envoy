@@ -1777,6 +1777,45 @@ TEST_P(MultiplexedRingHashIntegrationTest, CookieRoutingNoCookieWithNonzeroTtlSe
   EXPECT_EQ(set_cookies.size(), 1);
 }
 
+TEST_P(MultiplexedRingHashIntegrationTest,
+       CookieRoutingNoCookieWithNonzeroTtlSetAndWithAttributes) {
+  config_helper_.addConfigModifier(
+      [&](envoy::extensions::filters::network::http_connection_manager::v3::HttpConnectionManager&
+              hcm) -> void {
+        auto* hash_policy = hcm.mutable_route_config()
+                                ->mutable_virtual_hosts(0)
+                                ->mutable_routes(0)
+                                ->mutable_route()
+                                ->add_hash_policy();
+        auto* cookie = hash_policy->mutable_cookie();
+        cookie->set_name("foo");
+        cookie->mutable_ttl()->set_seconds(15);
+        auto* attribute_1 = cookie->mutable_attributes()->Add();
+        attribute_1->set_name("test1");
+        attribute_1->set_value("value1");
+        auto* attribute_2 = cookie->mutable_attributes()->Add();
+        attribute_2->set_name("test2");
+        attribute_2->set_value("value2");
+      });
+
+  std::set<std::string> set_cookies;
+  sendMultipleRequests(
+      1024,
+      Http::TestRequestHeaderMapImpl{{":method", "POST"},
+                                     {":path", "/test/long/url"},
+                                     {":scheme", "http"},
+                                     {":authority", "host"}},
+      [&](IntegrationStreamDecoder& response) {
+        EXPECT_EQ("200", response.headers().getStatusValue());
+        std::string value(
+            response.headers().get(Http::Headers::get().SetCookie)[0]->value().getStringView());
+        set_cookies.insert(value);
+        EXPECT_THAT(value,
+                    MatchesRegex("foo=.*; Max-Age=15; test1=value1; test2=value2; HttpOnly"));
+      });
+  EXPECT_EQ(set_cookies.size(), 1);
+}
+
 TEST_P(MultiplexedRingHashIntegrationTest, CookieRoutingNoCookieWithZeroTtlSet) {
   config_helper_.addConfigModifier(
       [&](envoy::extensions::filters::network::http_connection_manager::v3::HttpConnectionManager&
@@ -2129,7 +2168,84 @@ TEST_P(Http2FrameIntegrationTest, AccessLogOfWireBytesIfResponseSizeGreaterThanW
   // Cleanup.
   tcp_client_->close();
 }
+TEST_P(Http2FrameIntegrationTest, HostDifferentFromAuthority) {
+  beginSession();
 
+  uint32_t request_idx = 0;
+  auto request = Http2Frame::makeRequest(Http2Frame::makeClientStreamId(request_idx),
+                                         "one.example.com", "/path", {{"host", "two.example.com"}});
+  sendFrame(request);
+
+  waitForNextUpstreamRequest();
+  EXPECT_EQ(upstream_request_->headers().getHostValue(), "one.example.com");
+  upstream_request_->encodeHeaders(default_response_headers_, true);
+  auto frame = readFrame();
+  EXPECT_EQ(Http2Frame::Type::Headers, frame.type());
+  EXPECT_EQ(Http2Frame::ResponseStatus::Ok, frame.responseStatus());
+  tcp_client_->close();
+}
+
+TEST_P(Http2FrameIntegrationTest, HostSameAsAuthority) {
+  beginSession();
+
+  uint32_t request_idx = 0;
+  auto request = Http2Frame::makeRequest(Http2Frame::makeClientStreamId(request_idx),
+                                         "one.example.com", "/path", {{"host", "one.example.com"}});
+  sendFrame(request);
+
+  waitForNextUpstreamRequest();
+  EXPECT_EQ(upstream_request_->headers().getHostValue(), "one.example.com");
+  upstream_request_->encodeHeaders(default_response_headers_, true);
+  auto frame = readFrame();
+  EXPECT_EQ(Http2Frame::Type::Headers, frame.type());
+  EXPECT_EQ(Http2Frame::ResponseStatus::Ok, frame.responseStatus());
+  tcp_client_->close();
+}
+
+TEST_P(Http2FrameIntegrationTest, HostConcatenatedWithAuthorityWithOverride) {
+  config_helper_.addRuntimeOverride("envoy.reloadable_features.http2_discard_host_header", "false");
+  beginSession();
+
+  uint32_t request_idx = 0;
+  auto request = Http2Frame::makeRequest(Http2Frame::makeClientStreamId(request_idx),
+                                         "one.example.com", "/path", {{"host", "two.example.com"}});
+  sendFrame(request);
+
+  waitForNextUpstreamRequest();
+  EXPECT_EQ(upstream_request_->headers().getHostValue(), "one.example.com,two.example.com");
+  upstream_request_->encodeHeaders(default_response_headers_, true);
+  auto frame = readFrame();
+  EXPECT_EQ(Http2Frame::Type::Headers, frame.type());
+  EXPECT_EQ(Http2Frame::ResponseStatus::Ok, frame.responseStatus());
+  tcp_client_->close();
+}
+
+// All HTTP/2 static headers must be before non-static headers.
+// Verify that codecs validate this.
+TEST_P(Http2FrameIntegrationTest, HostBeforeAuthorityIsRejected) {
+#ifdef ENVOY_ENABLE_UHV
+  // TODO(yanavlasov): fix this check for oghttp2 in UHV mode.
+  return;
+#endif
+  beginSession();
+
+  Http2Frame request = Http2Frame::makeEmptyHeadersFrame(Http2Frame::makeClientStreamId(0),
+                                                         Http2Frame::HeadersFlags::EndHeaders);
+  request.appendStaticHeader(Http2Frame::StaticHeaderIndex::MethodPost);
+  request.appendStaticHeader(Http2Frame::StaticHeaderIndex::SchemeHttps);
+  request.appendHeaderWithoutIndexing(Http2Frame::StaticHeaderIndex::Path, "/path");
+  // Add the `host` header before `:authority`
+  request.appendHeaderWithoutIndexing({"host", "two.example.com"});
+  request.appendHeaderWithoutIndexing(Http2Frame::StaticHeaderIndex::Authority, "one.example.com");
+  request.adjustPayloadSize();
+
+  sendFrame(request);
+
+  // By default codec treats stream errors as protocol errors and closes the connection.
+  tcp_client_->waitForDisconnect();
+  tcp_client_->close();
+  EXPECT_EQ(1, test_server_->counter("http.config_test.downstream_cx_protocol_error")->value());
+}
 TEST_P(Http2FrameIntegrationTest, MultipleHeaderOnlyRequests) {
   const int kRequestsSentPerIOCycle = 20;
   autonomous_upstream_ = true;
@@ -2368,7 +2484,7 @@ TEST_P(Http2FrameIntegrationTest, ResettingDeferredRequestsTriggersPrematureRese
 TEST_P(Http2FrameIntegrationTest, CloseConnectionWithDeferredStreams) {
   // Use large number of requests to ensure close is detected while there are
   // still some deferred streams.
-  const int kRequestsSentPerIOCycle = 1000;
+  const int kRequestsSentPerIOCycle = 20000;
   config_helper_.addRuntimeOverride("http.max_requests_per_io_cycle", "1");
   // Ensure premature reset detection does not get in the way
   config_helper_.addRuntimeOverride("overload.premature_reset_total_stream_count", "1001");
@@ -2376,8 +2492,7 @@ TEST_P(Http2FrameIntegrationTest, CloseConnectionWithDeferredStreams) {
 
   std::string buffer;
   for (int i = 0; i < kRequestsSentPerIOCycle; ++i) {
-    auto request = Http2Frame::makeRequest(Http2Frame::makeClientStreamId(i), "a", "/",
-                                           {{"response_data_blocks", "0"}, {"no_trailers", "1"}});
+    auto request = Http2Frame::makeRequest(Http2Frame::makeClientStreamId(i), "a", "/");
     absl::StrAppend(&buffer, std::string(request));
   }
 
@@ -2386,8 +2501,9 @@ TEST_P(Http2FrameIntegrationTest, CloseConnectionWithDeferredStreams) {
   // Drop the downstream connection
   tcp_client_->close();
   // Test that Envoy can clean-up deferred streams
-  test_server_->waitForCounterEq("http.config_test.downstream_rq_rx_reset",
-                                 kRequestsSentPerIOCycle);
+  // Make the timeout longer to accommodate non optimized builds
+  test_server_->waitForCounterEq("http.config_test.downstream_rq_rx_reset", kRequestsSentPerIOCycle,
+                                 TestUtility::DefaultTimeout * 3);
 }
 
 INSTANTIATE_TEST_SUITE_P(IpVersions, Http2FrameIntegrationTest,
