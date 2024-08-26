@@ -1,0 +1,6 @@
+node:
+  cluster: cluster-1
+  id: envoy-instance-1
+dynamic_resources:
+  lds_config:
+    path: ./lds.yaml

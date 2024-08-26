@@ -5,17 +5,26 @@ package envoy.extensions.filters.http.llm_inference.v3;
 import "udpa/annotations/status.proto";
 import "validate/validate.proto";
 
+option java_package = "io.envoyproxy.envoy.extensions.filters.http.llm_inference.v3";
+option java_outer_classname = "LlmInferenceProto";
+option java_multiple_files = true;
+option go_package = "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/llm_inference/v3;llm_inferencev3";
 option (udpa.annotations.file_status).package_version_status = ACTIVE;
 
 message modelParameter {
   int32 n_threads = 1;
+
   int32 n_parallel = 2;
+
   map<string, string> modelpath = 3;
 }
 
 message modelChosen {
   string usemodel = 1;
+
   int32 first_byte_timeout = 2;
+
   int32 inference_timeout = 3;
+
   bool embedding = 4;
 }

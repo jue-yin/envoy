@@ -55,8 +55,7 @@ Http::FilterHeadersStatus LLMInferenceFilter::decodeHeaders(Http::RequestHeaderM
 
   // Route-level configuration.
   const auto* per_route_inference_settings =
-      Http::Utility::resolveMostSpecificPerFilterConfig<LLMInferenceFilterConfigPerRoute>(
-          "envoy.filters.http.llm_inference", decoder_callbacks_->route());
+      Http::Utility::resolveMostSpecificPerFilterConfig<LLMInferenceFilterConfigPerRoute>(decoder_callbacks_);
   if (!per_route_inference_settings) {
     return Http::FilterHeadersStatus::Continue;
   } else {

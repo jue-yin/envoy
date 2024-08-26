@@ -1,0 +1,59 @@
+version_info: "0"
+resources:
+- "@type": type.googleapis.com/envoy.config.listener.v3.Listener
+  name: listener_0
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 10000
+  filter_chains:
+  - filters:
+    - name: envoy.filters.network.http_connection_manager
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+        stat_prefix: listener_http
+        http_filters:
+        - name: envoy.filters.http.llm_inference
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.llm_inference.v3.modelParameter
+            n_threads : 64
+            n_parallel : 2
+            modelpath: {
+              "qwen2": "/home/yuanjq/model/qwen2-7b-instruct-q5_k_m.gguf",
+              "llama3": "/home/yuanjq/model/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+              "bge": "/home/yuanjq/model/bge-small-zh-v1.5-f32.gguf"
+            }
+        - name: envoy.filters.http.router
+          typed_config:
+            "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        route_config:
+          name: route
+          virtual_hosts:
+          - name: llm_inference_service
+            domains: ["api.openai.com"]
+            routes:
+            - match:
+              #   prefix: "/v1/embeddings"
+              # typed_per_filter_config:
+              #   envoy.filters.http.llm_inference:
+              #     "@type": type.googleapis.com/envoy.extensions.filters.http.llm_inference.v3.modelChosen
+                  # usemodel: "qwen2"
+                  # first_byte_timeout : 2
+                  # inference_timeout : 90
+                  # embedding : true
+              # direct_response:
+              #   status: 504
+              #   body:
+              #     inline_string: "inference timeout"
+                prefix: "/v1/chat/completions"
+              typed_per_filter_config:
+                envoy.filters.http.llm_inference:
+                  "@type": type.googleapis.com/envoy.extensions.filters.http.llm_inference.v3.modelChosen
+                  usemodel: "qwen2"
+                  first_byte_timeout : 4
+                  inference_timeout : 90
+                  embedding : false
+              direct_response:
+                status: 504
+                body:
+                  inline_string: "inference timeout"

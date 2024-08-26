@@ -358,6 +358,18 @@ REPOSITORY_LOCATIONS_SPEC = dict(
         license = "Apache-2.0",
         license_url = "https://github.com/google/tcmalloc/blob/{version}/LICENSE",
     ),
+    com_github_ggerganov_llama = dict(
+        project_name = "llama.cpp",
+        project_desc = "LLM inference in C/C++",
+        project_url = "https://github.com/ggerganov/llama.cpp",
+        version = "a07c32ea54850c989f0ef6989da5b955b77b7172",
+        sha256 = "4a5aaa9f4329dc5364ff6e4eea9ee977adce24051f5a6ba099faaaaa57a47149",
+        strip_prefix = "llama.cpp-{version}",
+        urls = ["https://github.com/ggerganov/llama.cpp/archive/{version}.zip"],
+        use_category = ["dataplane_core"],
+        release_date = "2024-08-23",
+        cpe = "N/A",
+    ),
     com_github_gperftools_gperftools = dict(
         project_name = "gperftools",
         project_desc = "tcmalloc and profiling libraries",
