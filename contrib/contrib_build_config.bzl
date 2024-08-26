@@ -10,6 +10,7 @@ CONTRIB_EXTENSIONS = {
     "envoy.filters.http.language":                              "//contrib/language/filters/http/source:config_lib",
     "envoy.filters.http.squash":                                "//contrib/squash/filters/http/source:config",
     "envoy.filters.http.sxg":                                   "//contrib/sxg/filters/http/source:config",
+    "envoy.filters.http.llm_inference":                         "//contrib/llm_inference/filters/http/source:config",
 
     #
     # Upstreams
