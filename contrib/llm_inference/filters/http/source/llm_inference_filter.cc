@@ -66,9 +66,9 @@ Http::FilterHeadersStatus LLMInferenceFilter::decodeHeaders(Http::RequestHeaderM
   
   // check header
   const absl::string_view headersPath = headers.getPathValue();
-  if (headersPath == "/v1/chat/completions") {
+  if (absl::EndsWith(headersPath, "/v1/chat/completions")) {
     task_type_ = InferencetasktypeTypeCompletion;
-  } else if (headersPath == "/v1/embeddings") {
+  } else if (absl::EndsWith(headersPath, "/v1/embeddings")) {
     task_type_ = InferencetasktypeTypeEmbeedings;
   } else {
     return Http::FilterHeadersStatus::Continue;

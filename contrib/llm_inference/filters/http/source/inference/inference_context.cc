@@ -1524,7 +1524,7 @@ void InferenceContext::sendEmbedding(server_slot & slot, const llama_batch & bat
 void InferenceContext::sendError(const int& id_task, const std::string & error, const enum error_type type = ERROR_TYPE_SERVER) {
   if (callback_body_.find(id_task) != callback_body_.end()) {
     LookupBodyCallback& cb = callback_body_[id_task];
-    cb(ModelInferenceResult{true, false, error,type});
+    cb(ModelInferenceResult{false, false, error,type});
   }
 }
 
