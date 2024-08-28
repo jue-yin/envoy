@@ -942,6 +942,45 @@ void InferenceContext::updateSlots() {
     });
   }
 
+  // apply context-shift if needed
+  // TODO: simplify and improve
+  for (server_slot & slot : slots) {
+    if (slot.ga_n == 1) {
+      if (slot.is_processing() && static_cast<int>(system_tokens.size()) + slot.n_past >= slot.n_ctx - 1) {
+        // Shift context
+        const int n_keep    = slot.params.n_keep + add_bos_token;
+        const int n_left    = static_cast<int>(system_tokens.size()) + slot.n_past - n_keep;
+        const int n_discard = slot.params.n_discard ? slot.params.n_discard : (n_left / 2);
+
+        LOG_INFO("slot context shift", {
+            {"id_slot",         slot.id},
+            {"id_task",         slot.id_task},
+            {"n_keep",          n_keep},
+            {"n_left",          n_left},
+            {"n_discard",       n_discard},
+            {"n_ctx",           n_ctx},
+            {"n_past",          slot.n_past},
+            {"n_system_tokens", system_tokens.size()},
+            {"n_cache_tokens",  slot.cache_tokens.size()}
+        });
+
+        llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
+        llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
+
+        if (slot.params.cache_prompt) {
+          for (size_t i = n_keep + n_discard; i < slot.cache_tokens.size(); i++) {
+              slot.cache_tokens[i - n_discard] = slot.cache_tokens[i];
+          }
+
+          slot.cache_tokens.resize(slot.cache_tokens.size() - n_discard);
+        }
+
+        slot.n_past -= n_discard;
+
+        slot.truncated = true;
+      }
+    }
+  }
   // start populating the batch for this iteration
   llama_batch_clear(batch);
 
