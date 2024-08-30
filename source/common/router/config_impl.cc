@@ -59,7 +59,7 @@ namespace {
 
 constexpr uint32_t DEFAULT_MAX_DIRECT_RESPONSE_BODY_SIZE_BYTES = 4096;
 
-#if defined(ALIMESH)
+#if defined(HIGRESS)
 constexpr absl::string_view EnvoyRouteIdentifierValue = "true";
 #endif
 

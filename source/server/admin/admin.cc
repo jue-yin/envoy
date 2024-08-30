@@ -353,7 +353,7 @@ Admin::RequestPtr AdminImpl::makeRequest(AdminStream& admin_stream) const {
 
   for (const UrlHandler& handler : handlers_) {
     if (path_and_query.compare(0, query_index, handler.prefix_) == 0) {
-#if defined(ALIMESH)
+#if defined(HIGRESS)
       if (handler.prefix_ != "/stats/prometheus") {
         auto route_identifier = admin_stream.getRequestHeaders().getByKey(
             Http::CustomHeaders::get().AliExtendedValues.XEnvoyRouteIdentifier);
