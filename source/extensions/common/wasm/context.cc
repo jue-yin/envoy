@@ -1120,6 +1120,10 @@ WasmResult Context::redisCall(std::string_view cluster, std::string_view query,
 }
 
 void Context::onRedisCallSuccess(uint32_t token, std::string&& response) {
+  if (wasm()->isFailed()) {
+    redis_request_.erase(token);
+    return;
+  }
   if (proxy_wasm::current_context_ != nullptr) {
     // We are in a reentrant call, so defer.
     wasm()->addAfterVmCallAction([this, token, response = std::move(response)]() mutable {
@@ -1135,13 +1139,21 @@ void Context::onRedisCallSuccess(uint32_t token, std::string&& response) {
 
   uint32_t body_size = response.size();
   redis_call_response_ = std::move(response);
+  // Deferred "after VM call" actions are going to be executed upon returning from
+  // ContextBase::*, which might include deleting Context object via proxy_done().
+  wasm()->addAfterVmCallAction([this, handler] {
+    redis_call_response_.clear();
+    redis_request_.erase(handler);
+  });
   proxy_wasm::ContextBase::onRedisCallResponse(
       token, static_cast<uint32_t>(proxy_wasm::RedisStatus::Ok), body_size);
-  redis_call_response_.clear();
-  redis_request_.erase(handler);
 }
 
 void Context::onRedisCallFailure(uint32_t token) {
+  if (wasm()->isFailed()) {
+    redis_request_.erase(token);
+    return;
+  }
   if (proxy_wasm::current_context_ != nullptr) {
     // We are in a reentrant call, so defer.
     wasm()->addAfterVmCallAction([this, token] { onRedisCallFailure(token); });
@@ -1154,10 +1166,14 @@ void Context::onRedisCallFailure(uint32_t token) {
   }
   status_code_ = static_cast<uint32_t>(WasmResult::BrokenConnection);
   status_message_ = "reset";
+  // Deferred "after VM call" actions are going to be executed upon returning from
+  // ContextBase::*, which might include deleting Context object via proxy_done().
+  wasm()->addAfterVmCallAction([this, handler] {
+    status_message_ = "";
+    redis_request_.erase(handler);
+  });
   proxy_wasm::ContextBase::onRedisCallResponse(
       token, static_cast<uint32_t>(proxy_wasm::RedisStatus::NetworkError), 0);
-  status_message_ = "";
-  redis_request_.erase(handler);
 }
 #endif
 
@@ -2064,6 +2080,12 @@ void Context::setEncoderFilterCallbacks(Envoy::Http::StreamEncoderFilterCallback
 
 void Context::onHttpCallSuccess(uint32_t token, Envoy::Http::ResponseMessagePtr&& response) {
   // TODO: convert this into a function in proxy-wasm-cpp-host and use here.
+#if defined(HIGRESS)
+  if (wasm()->isFailed()) {
+    http_request_.erase(token);
+    return;
+  }
+#endif
   if (proxy_wasm::current_context_ != nullptr) {
     // We are in a reentrant call, so defer.
     wasm()->addAfterVmCallAction([this, token, response = response.release()] {
@@ -2088,6 +2110,12 @@ void Context::onHttpCallSuccess(uint32_t token, Envoy::Http::ResponseMessagePtr&
 }
 
 void Context::onHttpCallFailure(uint32_t token, Http::AsyncClient::FailureReason reason) {
+#if defined(HIGRESS)
+  if (wasm()->isFailed()) {
+    http_request_.erase(token);
+    return;
+  }
+#endif
   if (proxy_wasm::current_context_ != nullptr) {
     // We are in a reentrant call, so defer.
     wasm()->addAfterVmCallAction([this, token, reason] { onHttpCallFailure(token, reason); });
@@ -2118,6 +2146,12 @@ void Context::onGrpcReceiveWrapper(uint32_t token, ::Envoy::Buffer::InstancePtr 
       grpc_call_request_.erase(token);
     }
   };
+#if defined(HIGRESS)
+  if (wasm()->isFailed()) {
+    cleanup();
+    return;
+  }
+#endif
   if (wasm()->on_grpc_receive_) {
     grpc_receive_buffer_ = std::move(response);
     uint32_t response_size = grpc_receive_buffer_->length();
@@ -2154,6 +2188,12 @@ void Context::onGrpcCloseWrapper(uint32_t token, const Grpc::Status::GrpcStatus&
       }
     }
   };
+#if defined(HIGRESS)
+  if (wasm()->isFailed()) {
+    cleanup();
+    return;
+  }
+#endif
   if (wasm()->on_grpc_close_) {
     status_code_ = static_cast<uint32_t>(status);
     status_message_ = toAbslStringView(message);
