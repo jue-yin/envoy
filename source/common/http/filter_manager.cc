@@ -1565,8 +1565,17 @@ bool ActiveStreamDecoderFilter::recreateStream(const ResponseHeaderMap* headers)
     return false;
   }
 
+#if defined(HIGRESS)
+  const auto& original_details = parent_.streamInfo().responseCodeDetails();
+  parent_.streamInfo().setResponseCodeDetails(
+      original_details ? absl::StrCat(StreamInfo::ResponseCodeDetails::get().InternalRedirect, ":",
+                                      original_details.value())
+                       : StreamInfo::ResponseCodeDetails::get().InternalRedirect);
+
+#else
   parent_.streamInfo().setResponseCodeDetails(
       StreamInfo::ResponseCodeDetails::get().InternalRedirect);
+#endif
 
   if (headers != nullptr) {
     // The call to setResponseHeaders is needed to ensure that the headers are properly logged in
