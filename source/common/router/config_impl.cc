@@ -59,6 +59,10 @@ namespace {
 
 constexpr uint32_t DEFAULT_MAX_DIRECT_RESPONSE_BODY_SIZE_BYTES = 4096;
 
+#if defined(ALIMESH)
+constexpr absl::string_view EnvoyRouteIdentifierValue = "true";
+#endif
+
 void mergeTransforms(Http::HeaderTransforms& dest, const Http::HeaderTransforms& src) {
   dest.headers_to_append_or_add.insert(dest.headers_to_append_or_add.end(),
                                        src.headers_to_append_or_add.begin(),
@@ -843,6 +847,11 @@ void RouteEntryImplBase::finalizeRequestHeaders(Http::RequestHeaderMap& headers,
     // Later evaluated header parser wins.
     header_parser->evaluateHeaders(headers, stream_info);
   }
+
+#if defined(HIGRESS)
+  headers.setReferenceKey(Http::CustomHeaders::get().AliExtendedValues.XEnvoyRouteIdentifier,
+                          EnvoyRouteIdentifierValue);
+#endif
 
   // Restore the port if this was a CONNECT request.
   // Note this will restore the port for HTTP/2 CONNECT-upgrades as well as as HTTP/1.1 style

@@ -137,6 +137,7 @@ public:
     const LowerCaseString TriRespStartTime{"resp-start-time"};
     const LowerCaseString EnvoyOriginalHost{"original-host"};
     const LowerCaseString XEnvoyOriginalHost{"x-envoy-original-host"};
+    const LowerCaseString XEnvoyRouteIdentifier{"x-envoy-route-identifier"};
   } AliExtendedValues;
 #endif
 };
