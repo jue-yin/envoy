@@ -1399,7 +1399,9 @@ RouteConstSharedPtr RouteEntryImplBase::pickWeightedCluster(const Http::HeaderMa
                                                    static_cast<RouteEntryAndRoute*>(cluster.get()));
           return cluster_specifier_plugin_->route(route, *request_header);
         }
-        return cluster_specifier_plugin_->route(cluster, *request_header);
+        auto route = std::make_shared<DynamicRouteEntry>(cluster.get(), shared_from_this(),
+                                                         cluster->clusterName());
+        return cluster_specifier_plugin_->route(route, *request_header);
       }
 #endif
       if (!cluster->clusterHeaderName().get().empty() &&

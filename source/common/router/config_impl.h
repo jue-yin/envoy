@@ -1034,8 +1034,8 @@ public:
     }
 
     RouteConstSharedPtr clone(const std::string& name) const {
-      return std::make_shared<Envoy::Router::RouteEntryImplBase::DynamicRouteEntry>(
-          parent_, shared_from_this(), name);
+      return std::make_shared<Envoy::Router::RouteEntryImplBase::DynamicRouteEntry>(parent_, owner_,
+                                                                                    name);
     }
 
     virtual RouteConstSharedPtr getRouteConstSharedPtr() const { return shared_from_this(); }
