@@ -81,6 +81,7 @@ public:
 private:
   ThreadLocal::TypedSlotPtr<PluginHandleSharedPtrThreadLocal> tls_slot_;
   Config::DataSource::RemoteAsyncDataProviderPtr remote_data_provider_;
+  Envoy::Extensions::Common::Wasm::WasmHandleSharedPtr base_wasm_handle_;
 };
 
 using FilterConfigSharedPtr = std::shared_ptr<FilterConfig>;
