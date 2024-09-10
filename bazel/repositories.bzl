@@ -347,6 +347,7 @@ def envoy_dependencies(skip_targets = []):
     _kafka_deps()
 
     _org_llvm_llvm()
+    _org_llvm_llvm_15_0_7()
     _com_github_wamr()
     _com_github_wavm_wavm()
     _com_github_wasmtime()
@@ -1260,6 +1261,16 @@ def _org_llvm_llvm():
         actual = "@envoy//bazel/foreign_cc:llvm",
     )
 
+def _org_llvm_llvm_15_0_7():
+    external_http_archive(
+        name = "org_llvm_llvm_15_0_7",
+        build_file_content = BUILD_ALL_CONTENT,
+    )
+    native.bind(
+        name = "llvm-15_0_7",
+        actual = "@envoy//bazel/foreign_cc:llvm_15_0_7",
+    )
+    
 def _com_github_wamr():
     external_http_archive(
         name = "com_github_wamr",
