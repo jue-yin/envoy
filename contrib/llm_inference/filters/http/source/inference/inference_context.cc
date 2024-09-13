@@ -248,9 +248,9 @@ struct server_task {
 /* ================================================================= */
 
 InferenceContext::InferenceContext(Singleton::InstanceSharedPtr owner, InferenceThread& inference_thread, 
-          const ModelParameter& model_parameter, const std::string& model_path, const ModelChosen& model_chosen):owner_(owner),
-           inference_thread_(inference_thread), model_name_(model_chosen.model_name) {
-  loadModel(model_parameter, model_path, model_chosen);
+          const ModelParameter& model_parameter, const std::string& model_name,const std::string& model_path, bool embedding):owner_(owner),
+           inference_thread_(inference_thread), model_name_(model_name) {
+  loadModel(model_parameter, model_path, embedding);
 }
 
 /* ================================================================= */
@@ -291,10 +291,10 @@ int InferenceContext::getId() {
 /* load model */
 /* ================================================================= */
 
-bool InferenceContext::loadModel(const ModelParameter& model_parameter, const std::string& model_path, const ModelChosen& model_chosen) {
+bool InferenceContext::loadModel(const ModelParameter& model_parameter, const std::string& model_path, bool embedding) {
   params.n_threads = model_parameter.n_threads;
   params.n_parallel = model_parameter.n_parallel;
-  params.embedding = model_chosen.embedding;
+  params.embedding = embedding;
   
   params.model = model_path;
   

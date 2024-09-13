@@ -30,9 +30,9 @@ using LookupBodyCallback = std::function<void(ModelInferenceResult&&)>;
 class InferenceContext {
 public:
 
-  InferenceContext(Envoy::Singleton::InstanceSharedPtr, InferenceThread&, const ModelParameter&, const std::string&, const ModelChosen&);
+  InferenceContext(Envoy::Singleton::InstanceSharedPtr, InferenceThread&, const ModelParameter&, const std::string&, const std::string&, bool);
   ~InferenceContext();
-  bool loadModel(const ModelParameter&, const std::string&, const ModelChosen&);
+  bool loadModel(const ModelParameter&, const std::string&, bool);
   void modelInference(LookupBodyCallback&& cb, std::shared_ptr<InferenceTaskMetaData>&&, int&);
   int getId();
 
@@ -78,6 +78,7 @@ private:
 };
 
 using InferenceContextSharedPtr = std::shared_ptr<InferenceContext>;
+using InferenceContextHashMapSharedPtr = std::shared_ptr<absl::flat_hash_map<std::string, InferenceContextSharedPtr>>;
 
 } // namespace LLMInference
 } // namespace HttpFilters

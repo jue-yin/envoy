@@ -16,7 +16,9 @@ message modelParameter {
 
   int32 n_parallel = 2;
 
-  map<string, string> modelpath = 3;
+  map<string, string> chat_modelpath = 3;
+
+  map<string, string> embedding_modelpath = 4;
 }
 
 message modelChosen {
@@ -25,6 +27,4 @@ message modelChosen {
   int32 first_byte_timeout = 2;
 
   int32 inference_timeout = 3;
-
-  bool embedding = 4;
 }

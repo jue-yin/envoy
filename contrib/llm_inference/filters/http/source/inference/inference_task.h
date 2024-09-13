@@ -15,7 +15,6 @@ struct ModelChosen {
   std::string model_name;
   int first_byte_timeout = 10;
   int inference_timeout = 90;
-  bool embedding = false;
 };
 
 // https://community.openai.com/t/openai-chat-list-of-error-codes-and-types/357791/11

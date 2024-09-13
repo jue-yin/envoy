@@ -14,24 +14,22 @@ public:
       : inference_thread_(thread_factory) {}
 
   std::shared_ptr<InferenceContext> load(std::shared_ptr<InferenceSingleton> singleton, const ModelParameter& model_parameter,
-              const ModelChosen& model_chosen, const std::string& model_path) {
+              const std::string& model_name, const std::string& model_path, bool embedding) {
     std::shared_ptr<InferenceContext> ctx;
-    absl::MutexLock lock(&mu_);
-    auto it = ctx_.find(model_chosen.model_name);
+    std::string model = model_name + " " + std::to_string(model_parameter.n_threads) + " " + std::to_string(model_parameter.n_parallel);
+    auto it = ctx_.find(model);
     if (it != ctx_.end()) {
       ctx = it->second.lock();
     }
     if (!ctx) {
-      ctx = std::make_shared<InferenceContext>(singleton, inference_thread_, model_parameter, model_path, model_chosen);
-      ctx_[model_chosen.model_name] = ctx;
+      ctx = std::make_shared<InferenceContext>(singleton, inference_thread_, model_parameter, model_name, model_path, embedding);
     }
     return ctx;
   }
 
 private:
   InferenceThread inference_thread_;
-  absl::Mutex mu_;
-  absl::flat_hash_map<std::string, std::weak_ptr<InferenceContext>> ctx_ ABSL_GUARDED_BY(mu_);
+  absl::flat_hash_map<std::string, std::weak_ptr<InferenceContext>> ctx_;
 };
 
 SINGLETON_MANAGER_REGISTRATION(http_inference_singleton);
@@ -49,14 +47,24 @@ Http::FilterFactoryCb LLMInferenceFilterConfigFactory::createFilterFactoryFromPr
               return std::make_shared<InferenceSingleton>(context.api().threadFactory());
             });
 
-    InferenceContextSharedPtr ctx;
-    auto modelpath = config->modelPath();
-    if (modelpath.contains(model_Chosen_.model_name)) {
-      ctx = inference->load(inference, config->modelParameter(), model_Chosen_, modelpath[model_Chosen_.model_name]);
+    absl::flat_hash_map<std::string, InferenceContextSharedPtr> ctx;
+
+    auto chat_modelpath = config->chatModelPath();
+
+    for (auto& model: chat_modelpath) {
+      ctx[model.first] = inference->load(inference, config->modelParameter(), model.first, model.second, false);
     }
 
-    return [config, ctx](Http::FilterChainFactoryCallbacks& callbacks) -> void {
-      callbacks.addStreamDecoderFilter(std::make_shared<LLMInferenceFilter>(config, ctx));
+    auto embedding_modelpath = config->embeddingModelPath();
+
+    for (auto& model: embedding_modelpath) {
+      ctx[model.first] = inference->load(inference, config->modelParameter(), model.first, model.second, true);
+    }
+  
+    InferenceContextHashMapSharedPtr ctx_map = std::make_shared<absl::flat_hash_map<std::string, InferenceContextSharedPtr>>(ctx);
+
+    return [config, ctx_map](Http::FilterChainFactoryCallbacks& callbacks) -> void {
+      callbacks.addStreamDecoderFilter(std::make_shared<LLMInferenceFilter>(config, ctx_map));
     };
 }
 
@@ -66,8 +74,7 @@ Router::RouteSpecificFilterConfigConstSharedPtr LLMInferenceFilterConfigFactory:
     Server::Configuration::ServerFactoryContext&, ProtobufMessage::ValidationVisitor&) {
     LLMInferenceFilterConfigPerRouteSharedPtr config = 
         std::make_shared<LLMInferenceFilterConfigPerRoute>(LLMInferenceFilterConfigPerRoute(proto_config));
-    
-    model_Chosen_ = config->modelChosen();
+
     return config;
 }
 

@@ -18,12 +18,14 @@ class LLMInferenceFilterConfig : public Router::RouteSpecificFilterConfig  {
 public:
   LLMInferenceFilterConfig(const envoy::extensions::filters::http::llm_inference::v3::modelParameter& proto_config);
 
-  const ModelParameter& modelParameter() const {return modelParameter_;}
-  const ModelPath& modelPath() const {return modelPath_; }
+  const ModelParameter& modelParameter() const {return model_parameter_;}
+  const ModelPath& chatModelPath() const {return chat_modelpath_; }
+  const ModelPath& embeddingModelPath() const {return embedding_modelpath_; }
 
 private:
-  const ModelParameter modelParameter_;
-  const ModelPath modelPath_;
+  const ModelParameter model_parameter_;
+  const ModelPath chat_modelpath_;
+  const ModelPath embedding_modelpath_;
 };
 
 using LLMInferenceFilterConfigSharedPtr = std::shared_ptr<LLMInferenceFilterConfig>;
@@ -32,10 +34,10 @@ class LLMInferenceFilterConfigPerRoute : public Router::RouteSpecificFilterConfi
 public:
   LLMInferenceFilterConfigPerRoute(const envoy::extensions::filters::http::llm_inference::v3::modelChosen& proto_config);
 
-  const ModelChosen& modelChosen() const {return modelChosen_;};
+  const ModelChosen& modelChosen() const {return model_chosen_;};
 
 private:
-  const ModelChosen modelChosen_;
+  const ModelChosen model_chosen_;
 };
 
 using LLMInferenceFilterConfigPerRouteSharedPtr = std::shared_ptr<LLMInferenceFilterConfigPerRoute>;
@@ -43,7 +45,7 @@ using LLMInferenceFilterConfigPerRouteSharedPtr = std::shared_ptr<LLMInferenceFi
 class LLMInferenceFilter : public Http::PassThroughDecoderFilter,
                            public std::enable_shared_from_this<LLMInferenceFilter> {
 public:
-  LLMInferenceFilter(LLMInferenceFilterConfigSharedPtr, InferenceContextSharedPtr);
+  LLMInferenceFilter(LLMInferenceFilterConfigSharedPtr, InferenceContextHashMapSharedPtr);
   ~LLMInferenceFilter();
 
   // Http::StreamFilterBase
@@ -63,18 +65,17 @@ public:
 
 private:
   const LLMInferenceFilterConfigSharedPtr config_;
-  const InferenceContextSharedPtr ctx_;
+  const InferenceContextHashMapSharedPtr ctx_;
 
   Http::StreamDecoderFilterCallbacks* decoder_callbacks_;
   Event::TimerPtr timer_;
   InferenceTaskType task_type_;
   Buffer::InstancePtr request_data_;
+  std::string model_name_;
   int first_byte_timeout_ = 10;
   int inference_timeout_ = 90;
   int id_task_ = -1;
   bool header_ = false;
-  const ModelParameter modelParameter() const;
-  const ModelPath modelPath() const;
 };
 
 using LLMInferenceFilterSharedPtr = std::shared_ptr<LLMInferenceFilter>;

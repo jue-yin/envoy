@@ -2,7 +2,6 @@
 
 #include "contrib/envoy/extensions/filters/http/llm_inference/v3/llm_inference.pb.h"
 #include "contrib/envoy/extensions/filters/http/llm_inference/v3/llm_inference.pb.validate.h"
-#include "contrib/llm_inference/filters/http/source/inference/inference_task.h"
 
 #include "source/extensions/filters/http/common/factory_base.h"
 
@@ -30,7 +29,6 @@ private:
       const envoy::extensions::filters::http::llm_inference::v3::modelChosen& proto_config,
       Server::Configuration::ServerFactoryContext&, ProtobufMessage::ValidationVisitor&) override;
   
-  ModelChosen model_Chosen_;
 };
 
 } // namespace LLMInference

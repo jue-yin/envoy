@@ -1,6 +1,4 @@
 #include "contrib/llm_inference/filters/http/source/llm_inference_filter.h"
-
-#include "inference/inference_context.h"
 #include "source/common/buffer/buffer_impl.h"
 
 #include "envoy/server/filter_config.h"
@@ -9,9 +7,6 @@
 #include "source/common/protobuf/utility.h"
 #include "source/common/http/headers.h"
 #include "source/common/http/header_map_impl.h"
-#include <chrono>
-#include <ctime>
-#include <memory>
 
 namespace Envoy {
 namespace Extensions {
@@ -20,31 +15,23 @@ namespace LLMInference {
 
 LLMInferenceFilterConfig::LLMInferenceFilterConfig(
     const envoy::extensions::filters::http::llm_inference::v3::modelParameter& proto_config)
-    : modelParameter_{proto_config.n_threads(), proto_config.n_parallel()},
-      modelPath_(proto_config.modelpath()) {}
+    : model_parameter_{proto_config.n_threads(), proto_config.n_parallel()},
+      chat_modelpath_(proto_config.chat_modelpath()), embedding_modelpath_(proto_config.embedding_modelpath()) {}
 
 LLMInferenceFilterConfigPerRoute::LLMInferenceFilterConfigPerRoute(
     const envoy::extensions::filters::http::llm_inference::v3::modelChosen& proto_config)
-    : modelChosen_{proto_config.usemodel() ,proto_config.first_byte_timeout(), proto_config.inference_timeout(), proto_config.embedding()} {}
+    : model_chosen_{proto_config.usemodel() ,proto_config.first_byte_timeout(), proto_config.inference_timeout()} {}
 
-LLMInferenceFilter::LLMInferenceFilter(LLMInferenceFilterConfigSharedPtr config, InferenceContextSharedPtr ctx)
+LLMInferenceFilter::LLMInferenceFilter(LLMInferenceFilterConfigSharedPtr config, InferenceContextHashMapSharedPtr ctx)
     : config_(config), ctx_(ctx) {}
 
 LLMInferenceFilter::~LLMInferenceFilter() {}
 
 void LLMInferenceFilter::onDestroy() {
   if (id_task_ != -1) {
-    ctx_->modelInference([](ModelInferenceResult&&) {
-    }, std::make_shared<InferenceTaskMetaData>("{}", false, ctx_->getId(), InferencetasktypeTypeCancel, id_task_), inference_timeout_);
+    (*ctx_)[model_name_]->modelInference([](ModelInferenceResult&&) {
+    }, std::make_shared<InferenceTaskMetaData>("{}", false, (*ctx_)[model_name_]->getId(), InferencetasktypeTypeCancel, id_task_), inference_timeout_);
   }
-}
-
-const ModelParameter LLMInferenceFilter::modelParameter() const {
-  return config_->modelParameter();
-}
-
-const ModelPath LLMInferenceFilter::modelPath() const {
-  return config_->modelPath();
 }
 
 Http::FilterHeadersStatus LLMInferenceFilter::decodeHeaders(Http::RequestHeaderMap& headers, bool end_stream) {
@@ -60,6 +47,7 @@ Http::FilterHeadersStatus LLMInferenceFilter::decodeHeaders(Http::RequestHeaderM
     return Http::FilterHeadersStatus::Continue;
   } else {
     auto per_route_config = per_route_inference_settings->modelChosen();
+    model_name_ = per_route_config.model_name;
     first_byte_timeout_ = per_route_config.first_byte_timeout;
     inference_timeout_ = per_route_config.inference_timeout;
   }
@@ -74,12 +62,17 @@ Http::FilterHeadersStatus LLMInferenceFilter::decodeHeaders(Http::RequestHeaderM
     return Http::FilterHeadersStatus::Continue;
   }
 
+  //check model
+  if (!ctx_->contains(model_name_)) {
+    return Http::FilterHeadersStatus::Continue;
+  }
+
   return Http::FilterHeadersStatus::StopIteration;
 }
 
 Http::FilterDataStatus LLMInferenceFilter::decodeData(Buffer::Instance& data, bool end_stream) {
   if (!end_stream) {
-    id_task_ = ctx_->getId();
+    id_task_ = (*ctx_)[model_name_]->getId();
     getHeaders(std::make_shared<InferenceTaskMetaData>(data.toString(), false, id_task_, task_type_, -1));
   }
   return Http::FilterDataStatus::StopIterationNoBuffer;
@@ -95,7 +88,7 @@ void LLMInferenceFilter::getHeaders(std::shared_ptr<InferenceTaskMetaData>&& tas
   LLMInferenceFilterWeakPtr self = weak_from_this();
   // The dispatcher needs to be captured because there's no guarantee that
   // decoder_callbacks_->dispatcher() is thread-safe.
-  ctx_->modelInference([self, &dispatcher = decoder_callbacks_->dispatcher()](ModelInferenceResult&& body) {
+  (*ctx_)[model_name_]->modelInference([self, &dispatcher = decoder_callbacks_->dispatcher()](ModelInferenceResult&& body) {
     // The callback is posted to the dispatcher to make sure it is called on the worker thread.
     dispatcher.post(
       [self, body = std::move(body)]() mutable {
