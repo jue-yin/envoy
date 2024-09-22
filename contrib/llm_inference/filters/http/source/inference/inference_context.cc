@@ -4,9 +4,6 @@
 #include "common/grammar-parser.cpp"
 #include "utils.hpp"
 #include "contrib/llm_inference/filters/http/source/inference/inference_context.h"
-#include <cstdio>
-#include <llama.h>
-#include <memory>
 
 char const *LLAMA_COMMIT = "";
 char const *LLAMA_COMPILER = "";
@@ -17,8 +14,6 @@ namespace Envoy {
 namespace Extensions {
 namespace HttpFilters {
 namespace LLMInference {
-
-gpt_params params;
 
 struct server_slot {
     int id;
@@ -306,6 +301,13 @@ bool InferenceContext::loadModel(const ModelParameter& model_parameter, const st
   llama_backend_init();
   llama_numa_init(params.numa);
 
+  LOG_INFO("system info", {
+    {"n_threads",       params.n_threads},
+    {"n_threads_batch", params.n_threads_batch},
+    {"total_threads",   std::thread::hardware_concurrency()},
+    {"system_info",     llama_print_system_info()},
+  });
+
   // load the model
   {
     // dedicate one sequence to the system prompt
@@ -490,7 +492,7 @@ void InferenceContext::processSingleTask(const server_task & task) {
       for (auto & use_slot : slots) {
         if (use_slot.id_task == task.id_target) {
           use_slot.release();
-          break;
+          return;
         }
       }
     } break;
@@ -936,7 +938,6 @@ void InferenceContext::updateSlots() {
     server_task task;
     task.type      = SERVER_TASK_TYPE_NEXT_RESPONSE;
     task.id_target = -1;
-    task.id = getId();
     inference_thread_.addTask([this, task](){
       this->processSingleTask(task);
     });

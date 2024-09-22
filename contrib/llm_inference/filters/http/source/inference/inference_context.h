@@ -3,10 +3,7 @@
 #include "contrib/llm_inference/filters/http/source/inference/inference_thread.h"
 #include "contrib/llm_inference/filters/http/source/inference/inference_task.h"
 #include "source/extensions/filters/http/common/factory_base.h"
-
-#include <functional>
-#include <memory>
-#include <vector>
+#include "common/common.h"
 #include "llama.h"
 
 namespace Envoy {
@@ -60,6 +57,7 @@ private:
   bool add_bos_token  = true;
   bool has_eos_token = true;
   int32_t n_ctx; // total context for all clients / slots
+  gpt_params params;
 
   // system prompt
   std::string              system_prompt;
