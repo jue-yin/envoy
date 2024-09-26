@@ -4,7 +4,7 @@ do
     curl -s http://localhost:10000/v1/chat/completions \
       -H "host:api.openai.com" \
       -d '{
-        "model": "qwen2",
+        "model": "qwen2.5",
         "messages": [
           {
             "role": "system",

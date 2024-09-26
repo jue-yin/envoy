@@ -13,8 +13,8 @@ public:
   InferenceSingleton(Thread::ThreadFactory& thread_factory)
       : inference_thread_(thread_factory) {}
 
-  std::shared_ptr<InferenceContext> load(std::shared_ptr<InferenceSingleton> singleton, const ModelParameter& model_parameter,
-              const std::string& model_name, const std::string& model_path, bool embedding) {
+  std::shared_ptr<InferenceContext> loadLLM(std::shared_ptr<InferenceSingleton> singleton, const ModelParameter& model_parameter,
+              const std::string& model_name, const std::string& model_path) {
     std::shared_ptr<InferenceContext> ctx;
     std::string model = model_name + " " + std::to_string(model_parameter.n_threads) + " " + std::to_string(model_parameter.n_parallel);
     auto it = ctx_.find(model);
@@ -22,7 +22,25 @@ public:
       ctx = it->second.lock();
     }
     if (!ctx) {
-      ctx = std::make_shared<InferenceContext>(singleton, inference_thread_, model_parameter, model_name, model_path, embedding);
+      ctx = std::make_shared<InferenceContext>(singleton, inference_thread_, model_name);
+      ctx->loadLLM(model_parameter, model_path);
+      ctx_[model] = ctx;
+    }
+    return ctx;
+  }
+
+  std::shared_ptr<InferenceContext> loadEmbedding(std::shared_ptr<InferenceSingleton> singleton, const ModelParameter& model_parameter,
+              const std::string& model_name, const std::string& model_path) {
+    std::shared_ptr<InferenceContext> ctx;
+    std::string model = model_name + " " + std::to_string(model_parameter.n_threads) + " " + std::to_string(model_parameter.n_parallel);
+    auto it = ctx_.find(model);
+    if (it != ctx_.end()) {
+      ctx = it->second.lock();
+    }
+    if (!ctx) {
+      ctx = std::make_shared<InferenceContext>(singleton, inference_thread_, model_name);
+      ctx->loadEmbedding(model_parameter, model_path);
+      ctx_[model] = ctx;
     }
     return ctx;
   }
@@ -52,13 +70,13 @@ Http::FilterFactoryCb LLMInferenceFilterConfigFactory::createFilterFactoryFromPr
     auto chat_modelpath = config->chatModelPath();
 
     for (auto& model: chat_modelpath) {
-      ctx[model.first] = inference->load(inference, config->modelParameter(), model.first, model.second, false);
+      ctx[model.first] = inference->loadLLM(inference, config->modelParameter(), model.first, model.second);
     }
 
     auto embedding_modelpath = config->embeddingModelPath();
 
     for (auto& model: embedding_modelpath) {
-      ctx[model.first] = inference->load(inference, config->modelParameter(), model.first, model.second, true);
+      ctx[model.first] = inference->loadEmbedding(inference, config->modelParameter(), model.first, model.second);
     }
   
     InferenceContextHashMapSharedPtr ctx_map = std::make_shared<absl::flat_hash_map<std::string, InferenceContextSharedPtr>>(ctx);

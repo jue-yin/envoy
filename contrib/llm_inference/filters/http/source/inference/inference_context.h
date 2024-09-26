@@ -3,6 +3,7 @@
 #include "contrib/llm_inference/filters/http/source/inference/inference_thread.h"
 #include "contrib/llm_inference/filters/http/source/inference/inference_task.h"
 #include "source/extensions/filters/http/common/factory_base.h"
+#include "source/common/common/logger.h"
 #include "common/common.h"
 #include "llama.h"
 
@@ -12,7 +13,7 @@ namespace HttpFilters {
 namespace LLMInference {
 
 struct server_task;
-struct server_slot;
+class server_slot;
 struct completion_token_output;
 
 struct ModelInferenceResult {
@@ -24,12 +25,13 @@ struct ModelInferenceResult {
 
 using LookupBodyCallback = std::function<void(ModelInferenceResult&&)>;
 
-class InferenceContext {
+class InferenceContext: public Logger::Loggable<Logger::Id::llm_inference> {
 public:
 
-  InferenceContext(Envoy::Singleton::InstanceSharedPtr, InferenceThread&, const ModelParameter&, const std::string&, const std::string&, bool);
+  InferenceContext(Envoy::Singleton::InstanceSharedPtr, InferenceThread&, const std::string&);
   ~InferenceContext();
-  bool loadModel(const ModelParameter&, const std::string&, bool);
+  bool loadLLM(const ModelParameter&, const std::string&);
+  bool loadEmbedding(const ModelParameter&, const std::string&);
   void modelInference(LookupBodyCallback&& cb, std::shared_ptr<InferenceTaskMetaData>&&, int&);
   int getId();
 

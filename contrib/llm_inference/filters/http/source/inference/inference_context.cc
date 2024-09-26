@@ -15,7 +15,8 @@ namespace Extensions {
 namespace HttpFilters {
 namespace LLMInference {
 
-struct server_slot {
+class server_slot: public Logger::Loggable<Logger::Id::llm_inference> {
+public:
     int id;
     int id_task = -1;
 
@@ -190,14 +191,14 @@ struct server_slot {
                 t_prompt_processing, n_prompt_tokens_processed,
                 t_token, n_tokens_second);
 
-        LOG_INFO(buffer, {
+        ENVOY_LOG(info, server_log(buffer, {
             {"id_slot",                   id},
             {"id_task",                   id_task},
             {"t_prompt_processing",       t_prompt_processing},
             {"n_prompt_tokens_processed", n_prompt_tokens_processed},
             {"t_token",                   t_token},
             {"n_tokens_second",           n_tokens_second},
-        });
+        }));
 
         t_token = t_token_generation / n_decoded;
         n_tokens_second = 1e3 / t_token_generation * n_decoded;
@@ -206,24 +207,24 @@ struct server_slot {
                 t_token_generation, n_decoded,
                 t_token, n_tokens_second);
 
-        LOG_INFO(buffer, {
+        ENVOY_LOG(info, server_log(buffer, {
             {"id_slot",            id},
             {"id_task",            id_task},
             {"t_token_generation", t_token_generation},
             {"n_decoded",          n_decoded},
             {"t_token",            t_token},
             {"n_tokens_second",    n_tokens_second},
-        });
+        }));
 
         snprintf(buffer, 512, "          total time = %10.2f ms", t_prompt_processing + t_token_generation);
 
-        LOG_INFO(buffer, {
+        ENVOY_LOG(info, server_log(buffer, {
             {"id_slot",             id},
             {"id_task",             id_task},
             {"t_prompt_processing", t_prompt_processing},
             {"t_token_generation",  t_token_generation},
             {"t_total",             t_prompt_processing + t_token_generation},
-        });
+        }));
     }
 };
 
@@ -243,10 +244,7 @@ struct server_task {
 /* ================================================================= */
 
 InferenceContext::InferenceContext(Singleton::InstanceSharedPtr owner, InferenceThread& inference_thread, 
-          const ModelParameter& model_parameter, const std::string& model_name,const std::string& model_path, bool embedding):owner_(owner),
-           inference_thread_(inference_thread), model_name_(model_name) {
-  loadModel(model_parameter, model_path, embedding);
-}
+    const std::string& model_name):owner_(owner), inference_thread_(inference_thread), model_name_(model_name){}
 
 /* ================================================================= */
 /* Destructors */
@@ -286,13 +284,14 @@ int InferenceContext::getId() {
 /* load model */
 /* ================================================================= */
 
-bool InferenceContext::loadModel(const ModelParameter& model_parameter, const std::string& model_path, bool embedding) {
-  params.n_threads = model_parameter.n_threads;
+bool InferenceContext::loadLLM(const ModelParameter& model_parameter, const std::string& model_path) {
+  params.cpuparams.n_threads = model_parameter.n_threads;
   params.n_parallel = model_parameter.n_parallel;
-  params.embedding = embedding;
-  
+  params.embedding = false;
+  params.use_mmap = false;
+
   params.model = model_path;
-  
+
   gpt_params_handle_model_default(params);
 
   if (params.model_alias == "unknown") {
@@ -301,12 +300,11 @@ bool InferenceContext::loadModel(const ModelParameter& model_parameter, const st
   llama_backend_init();
   llama_numa_init(params.numa);
 
-  LOG_INFO("system info", {
-    {"n_threads",       params.n_threads},
-    {"n_threads_batch", params.n_threads_batch},
+  ENVOY_LOG(info, server_log("system info",{
+    {"n_threads",       params.cpuparams.n_threads},
     {"total_threads",   std::thread::hardware_concurrency()},
     {"system_info",     llama_print_system_info()},
-  });
+  }));
 
   // load the model
   {
@@ -328,7 +326,9 @@ bool InferenceContext::loadModel(const ModelParameter& model_parameter, const st
   {
     const int32_t n_ctx_slot = n_ctx / params.n_parallel;
 
-    LOG_INFO("initializing slots", {{"n_slots", params.n_parallel}});
+    ENVOY_LOG(info, server_log("initializing slots",{
+      {"n_slots", params.n_parallel}
+    }));
 
     for (int i = 0; i < params.n_parallel; i++) {
       server_slot slot;
@@ -337,21 +337,21 @@ bool InferenceContext::loadModel(const ModelParameter& model_parameter, const st
       slot.n_ctx = n_ctx_slot;
       slot.n_predict = params.n_predict;
 
-      LOG_INFO("new slot", {
+      ENVOY_LOG(info, server_log("new slot",{
         {"id_slot",    slot.id},
         {"n_ctx_slot", slot.n_ctx}
-      });
+      }));
 
       const int ga_n = params.grp_attn_n;
       const int ga_w = params.grp_attn_w;
       if (ga_n != 1) {
         GGML_ASSERT(ga_n > 0                    && "ga_n must be positive");                       // NOLINT
         GGML_ASSERT(ga_w % ga_n == 0            && "ga_w must be a multiple of ga_n");             // NOLINT
-        LOG_INFO("slot self-extend", {
+        ENVOY_LOG(info, server_log("slot self-extend",{
           {"id_slot", slot.id},
           {"ga_n",    ga_n},
           {"ga_w",    ga_w}
-        });
+        }));
       }
       slot.ga_i = 0;
       slot.ga_n = ga_n;
@@ -372,8 +372,107 @@ bool InferenceContext::loadModel(const ModelParameter& model_parameter, const st
     }
   }
 
-  LOG_INFO("model loaded", {});
+  ENVOY_LOG(info, server_log("model loaded",{}));
+  // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
+  {
+    llama_chat_message chat[] = {{"user", "test"}};
 
+    if (!(llama_chat_apply_template(model, nullptr, chat, 1, true, nullptr, 0) > 0)) {
+      chat_template_ = "chatml";
+    }
+  }
+  return true;
+}
+
+bool InferenceContext::loadEmbedding(const ModelParameter& model_parameter, const std::string& model_path) {
+  params.cpuparams.n_threads = model_parameter.n_threads;
+  params.n_parallel = model_parameter.n_parallel;
+  params.embedding = true;
+  params.use_mmap = false;
+  
+  params.model = model_path;
+  
+  gpt_params_handle_model_default(params);
+
+  if (params.model_alias == "unknown") {
+    params.model_alias = params.model;
+  }
+  llama_backend_init();
+  llama_numa_init(params.numa);
+
+  ENVOY_LOG(info, server_log("system info",{
+    {"n_threads",       params.cpuparams.n_threads},
+    {"total_threads",   std::thread::hardware_concurrency()},
+    {"system_info",     llama_print_system_info()},
+  }));
+
+  // load the model
+  {
+    // dedicate one sequence to the system prompt
+    params.n_parallel += 1;
+    llama_init_result llama_init = llama_init_from_gpt_params(params);
+    model = llama_init.model;
+    ctx = llama_init.context;
+    params.n_parallel -= 1; // but be sneaky about it
+    if (model == nullptr) {
+      return false;
+    }
+    n_ctx = llama_n_ctx(ctx);
+
+    add_bos_token = llama_add_bos_token(model);
+    has_eos_token = !llama_add_eos_token(model);
+  }
+  // init slot
+  {
+    const int32_t n_ctx_slot = n_ctx / params.n_parallel;
+
+    ENVOY_LOG(info, server_log("initializing slots",{
+      {"n_slots", params.n_parallel}
+    }));
+
+    for (int i = 0; i < params.n_parallel; i++) {
+      server_slot slot;
+
+      slot.id = i;
+      slot.n_ctx = n_ctx_slot;
+      slot.n_predict = params.n_predict;
+
+      ENVOY_LOG(info, server_log("new slot",{
+        {"id_slot",    slot.id},
+        {"n_ctx_slot", slot.n_ctx}
+      }));
+
+      const int ga_n = params.grp_attn_n;
+      const int ga_w = params.grp_attn_w;
+      if (ga_n != 1) {
+        GGML_ASSERT(ga_n > 0                    && "ga_n must be positive");                       // NOLINT
+        GGML_ASSERT(ga_w % ga_n == 0            && "ga_w must be a multiple of ga_n");             // NOLINT
+        ENVOY_LOG(info, server_log("slot self-extend",{
+          {"id_slot", slot.id},
+          {"ga_n",    ga_n},
+          {"ga_w",    ga_w}
+        }));
+      }
+      slot.ga_i = 0;
+      slot.ga_n = ga_n;
+      slot.ga_w = ga_w;
+
+      slot.reset();
+
+      slots.push_back(slot);
+
+      // the update_slots() logic will always submit a maximum of n_batch tokens
+      // note that n_batch can be > n_ctx (e.g. for non-causal attention models such as BERT where the KV cache is not used)
+      {
+        const int32_t n_batch = llama_n_batch(ctx);
+
+        // only a single seq_id per token is needed
+        batch = llama_batch_init(std::max(n_batch, params.n_parallel), 0, 1);
+      }
+    }
+  }
+
+  ENVOY_LOG(info, server_log("model loaded",{}));
   // if a custom chat template is not supplied, we will use the one that comes with the model (if any)
   {
     llama_chat_message chat[] = {{"user", "test"}};
@@ -926,7 +1025,7 @@ void InferenceContext::updateSlots() {
     }
 
     if (all_idle) {
-      LOG_INFO("all slots are idle", {});
+      ENVOY_LOG(info, server_log("all slots are idle",{}));
       if (system_prompt.empty() && clean_kv_cache) {
         // clear the entire KV cache
         llama_kv_cache_clear(ctx);
@@ -952,18 +1051,17 @@ void InferenceContext::updateSlots() {
         const int n_keep    = slot.params.n_keep + add_bos_token;
         const int n_left    = static_cast<int>(system_tokens.size()) + slot.n_past - n_keep;
         const int n_discard = slot.params.n_discard ? slot.params.n_discard : (n_left / 2);
-
-        LOG_INFO("slot context shift", {
-            {"id_slot",         slot.id},
-            {"id_task",         slot.id_task},
-            {"n_keep",          n_keep},
-            {"n_left",          n_left},
-            {"n_discard",       n_discard},
-            {"n_ctx",           n_ctx},
-            {"n_past",          slot.n_past},
-            {"n_system_tokens", system_tokens.size()},
-            {"n_cache_tokens",  slot.cache_tokens.size()}
-        });
+        ENVOY_LOG(info, server_log("slot context shift",{
+          {"id_slot",         slot.id},
+          {"id_task",         slot.id_task},
+          {"n_keep",          n_keep},
+          {"n_left",          n_left},
+          {"n_discard",       n_discard},
+          {"n_ctx",           n_ctx},
+          {"n_past",          slot.n_past},
+          {"n_system_tokens", system_tokens.size()},
+          {"n_cache_tokens",  slot.cache_tokens.size()}
+        }));
 
         llama_kv_cache_seq_rm (ctx, slot.id + 1, n_keep            , n_keep + n_discard);
         llama_kv_cache_seq_add(ctx, slot.id + 1, n_keep + n_discard, system_tokens.size() + slot.n_past, -n_discard);
@@ -1010,7 +1108,13 @@ void InferenceContext::updateSlots() {
   int32_t n_batch  = llama_n_batch(ctx);
   int32_t n_ubatch = llama_n_ubatch(ctx);
 
+  // track if this is an embedding or non-embedding batch
+  // if we've added sampled tokens above, we are in non-embedding mode
+  // -1: none, 0: non-embedding, 1: embedding
+  int32_t batch_type = batch.n_tokens > 0 ? 0 : -1;
+
   // next, batch any pending prompts without exceeding n_batch
+  if (params.cont_batching || batch.n_tokens == 0) {
     for (auto & slot : slots) {
       // this slot still has a prompt to be processed
       if (slot.state == SLOT_STATE_IDLE && slot.command == SLOT_COMMAND_LOAD_PROMPT) {
@@ -1023,11 +1127,12 @@ void InferenceContext::updateSlots() {
           slot.t_start_generation = 0;
 
           if (slot.infill) {
+            const bool add_bos = llama_add_bos_token(model);
             bool suff_rm_leading_spc = true;
-            // if (params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
-            //   params.input_suffix.erase(0, 1);
-            //   suff_rm_leading_spc = false;
-            // }
+            if (params.input_suffix.find_first_of(' ') == 0 && params.input_suffix.size() > 1) {
+              params.input_suffix.erase(0, 1);
+              suff_rm_leading_spc = false;
+            }
 
             auto prefix_tokens = tokenize(ctx, slot.params.input_prefix, false);
             auto suffix_tokens = tokenize(ctx, slot.params.input_suffix, false);
@@ -1038,11 +1143,21 @@ void InferenceContext::updateSlots() {
             }
 
             prefix_tokens.insert(prefix_tokens.begin(), llama_token_prefix(model));
-            prefix_tokens.insert(prefix_tokens.begin(), llama_token_bos(model)); // always add BOS
-            prefix_tokens.insert(prefix_tokens.end(),   llama_token_suffix(model));
-            prefix_tokens.insert(prefix_tokens.end(),   suffix_tokens.begin(), suffix_tokens.end());
-            prefix_tokens.push_back(llama_token_middle(model));
-            prompt_tokens = prefix_tokens;
+            suffix_tokens.insert(suffix_tokens.begin(), llama_token_suffix(model));
+
+            auto embd_inp = params.spm_infill ? suffix_tokens : prefix_tokens;
+            auto embd_end = params.spm_infill ? prefix_tokens : suffix_tokens;
+            if (add_bos) {
+              embd_inp.insert(embd_inp.begin(), llama_token_bos(model));
+            }
+            embd_inp.insert(embd_inp.end(), embd_end.begin(), embd_end.end());
+
+            const llama_token middle_token = llama_token_middle(model);
+            if (middle_token >= 0) {
+              embd_inp.push_back(middle_token);
+            }
+
+            prompt_tokens = embd_inp;
           } else {
             prompt_tokens = tokenize(ctx, slot.prompt, system_prompt.empty()); // add BOS if there isn't system prompt
           }
@@ -1052,10 +1167,10 @@ void InferenceContext::updateSlots() {
 
           // empty prompt passed -> release the slot and send empty response
           if (prompt_tokens.empty()) {
-            LOG_INFO("empty prompt - releasing slot", {
-                      {"id_slot", slot.id},
-                      {"id_task", slot.id_task}
-            });
+            ENVOY_LOG(info, server_log("empty prompt - releasing slot",{
+              {"id_slot", slot.id},
+              {"id_task", slot.id_task}
+            }));
             slot.state = SLOT_STATE_PROCESSING;
             slot.command = SLOT_COMMAND_NONE;
             slot.release();
@@ -1123,11 +1238,10 @@ void InferenceContext::updateSlots() {
 
           if (slot.n_past == slot.n_prompt_tokens && slot.n_past > 0) {
             // we have to evaluate at least 1 token to generate logits.
-            LOG_INFO("we have to evaluate at least 1 token to generate logits", {
-                { "id_slot", slot.id },
-                { "id_task", slot.id_task }
-            });
-
+            ENVOY_LOG(info, server_log("we have to evaluate at least 1 token to generate logits",{
+              {"id_slot", slot.id},
+              {"id_task", slot.id_task}
+            }));
             slot.n_past--;
             if (slot.ga_i > 0) {
               slot.n_past_se--;
@@ -1142,6 +1256,14 @@ void InferenceContext::updateSlots() {
           if (batch.n_tokens + slot.n_prompt_tokens > n_batch) {
             continue;
           }
+        }
+
+        // check that we are in the right batch_type, if not defer the slot
+        bool slot_type = slot.embedding ? 1 : 0;
+        if (batch_type == -1) {
+          batch_type = slot_type;
+        } else if (batch_type != slot_type) {
+          continue;
         }
 
         // keep only the common part
@@ -1166,11 +1288,11 @@ void InferenceContext::updateSlots() {
 
         // remove the non-common part from the cache
         slot.cache_tokens.resize(slot.n_past);
-        LOG_INFO("kv cache rm [p0, end)", {
-            { "id_slot", slot.id },
-            { "id_task", slot.id_task },
-            { "p0",      p0 }
-        });
+        ENVOY_LOG(info, server_log("kv cache rm [p0, end)",{
+          {"id_slot", slot.id},
+          {"id_task", slot.id_task},
+          { "p0",     p0}
+        }));
         int32_t slot_npast = slot.n_past_se > 0 ? slot.n_past_se : slot.n_past;
 
         int32_t ga_i = slot.ga_i;
@@ -1217,10 +1339,15 @@ void InferenceContext::updateSlots() {
         break;
       }
     }
+  }
 
   if (batch.n_tokens == 0) {
     return;
   }
+
+  // make sure we're in the right embedding mode
+  llama_set_embeddings(ctx, batch_type == 1);
+
   // process the created batch of tokens
 
   for (int32_t i = 0; i < batch.n_tokens; i += n_batch) {
@@ -1234,11 +1361,6 @@ void InferenceContext::updateSlots() {
           const int bd = (slot.ga_w / slot.ga_n) * (slot.ga_n - 1);
           const int dd = (slot.ga_w / slot.ga_n) - ib * bd - slot.ga_w;
 
-          LOG_TEE("\n");
-          LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i, slot.n_past_se, ib * bd, slot.ga_i + ib * bd, slot.n_past_se + ib * bd);
-          LOG_TEE("div:   [%6d, %6d] / %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n, (slot.ga_i + ib * bd) / slot.ga_n, (slot.ga_i + ib * bd + slot.ga_w) / slot.ga_n);
-          LOG_TEE("shift: [%6d, %6d] + %6d -> [%6d, %6d]\n", slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd, slot.ga_i + ib * bd + slot.ga_w + dd, slot.n_past_se + ib * bd + dd);
-
           llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i, slot.n_past_se, ib * bd);
           llama_kv_cache_seq_div(ctx, slot.id + 1, slot.ga_i + ib * bd, slot.ga_i + ib * bd + slot.ga_w, slot.ga_n);
           llama_kv_cache_seq_add(ctx, slot.id + 1, slot.ga_i + ib * bd + slot.ga_w, slot.n_past_se + ib * bd, dd);
@@ -1246,8 +1368,6 @@ void InferenceContext::updateSlots() {
           slot.n_past_se -= bd;
 
           slot.ga_i += slot.ga_w / slot.ga_n;
-
-          LOG_TEE("\nn_past_old = %d, n_past = %d, ga_i = %d\n\n", slot.n_past_se + bd, slot.n_past_se, slot.ga_i);
         }
 
         slot.n_past_se += n_tokens;

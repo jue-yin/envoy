@@ -65,48 +65,16 @@ struct completion_token_output {
     std::vector<token_prob> probs;
 };
 
-#define LOG_INFO(   MSG, ...) server_log("INFO", __func__, __LINE__, MSG, __VA_ARGS__)
+static inline std::string server_log(const char * message, const json & extra) {
+    json log;
+    log.merge_patch({
+        {"msg",      message},
+    });
 
-static inline void server_log(const char * level, const char * function, int line, const char * message, const json & extra) {
-    std::stringstream ss_tid;
-    ss_tid << std::this_thread::get_id();
-    json log = json{
-        {"tid",       ss_tid.str()},
-        {"timestamp", time(nullptr)},
-    };
-
-    if (1) {
-        log.merge_patch({
-            {"level",    level},
-            {"function", function},
-            {"line",     line},
-            {"msg",      message},
-        });
-
-        if (!extra.empty()) {
-            log.merge_patch(extra);
-        }
-
-        printf("%s\n", log.dump(-1, ' ', false, json::error_handler_t::replace).c_str());
-    } else {
-        char buf[1024];
-        snprintf(buf, 1024, "%4s [%24s] %s", level, function, message);
-
-        if (!extra.empty()) {
-            log.merge_patch(extra);
-        }
-        std::stringstream ss;
-        ss << buf << " |";
-        for (const auto & el : log.items())
-        {
-            const std::string value = el.value().dump(-1, ' ', false, json::error_handler_t::replace);
-            ss << " " << el.key() << "=" << value;
-        }
-
-        const std::string str = ss.str();
-        printf("%.*s\n", static_cast<int>(str.size()), str.data());
+    if (!extra.empty()) {
+        log.merge_patch(extra);
     }
-    fflush(stdout);
+    return log.dump(-1, ' ', false, json::error_handler_t::replace);
 }
 
 template <typename T>

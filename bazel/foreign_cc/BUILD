@@ -576,8 +576,9 @@ envoy_cmake(
     cache_entries = {
         "CMAKE_INSTALL_LIBDIR": "lib",
         "BUILD_SHARED_LIBS": "off",
-        "GGML_OPENMP": "off",
+        "CMAKE_BUILD_TYPE": "Release"
     },
+    linkopts = ["-fopenmp"],
     lib_source = "@com_github_ggerganov_llama//:all",
     out_static_libs = select({
         "//conditions:default": [
