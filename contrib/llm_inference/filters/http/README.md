@@ -115,7 +115,7 @@ curl http://localhost:10000/v1/chat/completions \
 ### 4. 对比结果
 - **内存资源开销**
 
-并发请求数     |  项目     | Ollama
+并发请求数     |  LLM Inference Filter     | Ollama
 -------- |-------- | -----
 1  | 7.1GB | 7.1GB
 4  | 7.2GB| 7.2GB
@@ -123,7 +123,7 @@ curl http://localhost:10000/v1/chat/completions \
 
 - **响应延迟**
 
-并发请求数     |  项目     | Ollama
+并发请求数     |  LLM Inference Filter     | Ollama
 -------- |-------- | -----
 1  | 2633.20 ms /    34 tokens |  1336.57 ms / 15 tokens
 4  | 2873.74 ms / 34 tokens | 2196.26 ms / 15 tokens
@@ -131,7 +131,7 @@ curl http://localhost:10000/v1/chat/completions \
 
 - **推理延迟**
 
-并发请求数     |  项目     | Ollama
+并发请求数     |  LLM Inference Filter     | Ollama
 -------- |-------- | -----
 1  | 55543.16 ms |  62373.26 ms
 4  | 169539.01 ms| 231860.54ms
