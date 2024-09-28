@@ -1,21 +1,6 @@
-for i in {1..9}
+for i in {1..8}
 do
-    curl -s http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer no-key" \
-      -d '{
-        "model": "qwen2.5",
-        "messages": [
-          {
-            "role": "system",
-            "content": "You are a helpful assistant."
-          },
-          {
-            "role": "user",
-            "content": "Hello! Building a website can be done in 10 simple steps:"
-          }
-        ],
-        "stream": true,
-        "n_predict": 500
-      }' > /dev/null &
+curl -s localhost:11434/api/generate -d '{
+"model":"qwen2.5","options":{"num_thread":8,"num_predict":500},"prompt":"Hello! Building a website can be done in 10 simple steps:","stream":true}' > /dev/null &
+
 done

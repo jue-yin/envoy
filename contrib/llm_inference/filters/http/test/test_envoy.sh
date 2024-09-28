@@ -1,4 +1,4 @@
-for i in {1..9}
+for i in {1..8}
 do
     curl -s http://localhost:10000/v1/chat/completions \
       -H "host:api.openai.com" \
