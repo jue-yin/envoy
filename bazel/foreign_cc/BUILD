@@ -708,3 +708,24 @@ envoy_cmake(
     }),
     working_directory = "build/cmake",
 )
+
+envoy_cmake(
+    name = "llama",
+    cache_entries = {
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "BUILD_SHARED_LIBS": "off",
+        "CMAKE_BUILD_TYPE": "Release"
+    },
+    linkopts = ["-fopenmp"],
+    lib_source = "@com_github_ggerganov_llama//:all",
+    out_static_libs = select({
+        "//conditions:default": [
+            "libllama.a",
+            "libggml.a",
+        ],
+    }),
+    tags = ["skip_on_windows"],
+    postfix_script = select({
+        "//conditions:default": "rm -rf $INSTALLDIR/include/common && mkdir $INSTALLDIR/include/common && cp -rL $EXT_BUILD_ROOT/external/com_github_ggerganov_llama/common/* $INSTALLDIR/include/common",
+    }),
+)

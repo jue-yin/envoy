@@ -28,6 +28,11 @@ envoy.filters.http.sxg:
   - envoy.filters.http
   security_posture: robust_to_untrusted_downstream
   status: alpha
+envoy.filters.http.llm_inference:
+  categories:
+  - envoy.filters.http
+  security_posture: requires_trusted_downstream_and_upstream
+  status: wip
 envoy.filters.network.client_ssl_auth:
   categories:
   - envoy.filters.network
