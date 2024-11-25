@@ -269,6 +269,7 @@ public:
   }
 #if defined(HIGRESS)
   std::chrono::seconds keepaliveHeaderTimeout() const override { return keepalive_header_timeout_; }
+  bool retryOtherScopeWhenNotFound() const override { return retry_other_scope_when_not_found_; }
 #endif
 
 private:
@@ -332,6 +333,9 @@ private:
   // routes
   Router::ScopeKeyBuilderPtr scope_key_builder_;
   Config::ConfigProviderPtr scoped_routes_config_provider_;
+#if defined(HIGRESS)
+  bool retry_other_scope_when_not_found_;
+#endif
   std::chrono::milliseconds drain_timeout_;
   bool generate_request_id_;
   const bool preserve_external_request_id_;

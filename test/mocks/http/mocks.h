@@ -680,6 +680,7 @@ public:
   MOCK_METHOD(bool, addProxyProtocolConnectionState, (), (const));
 #if defined(HIGRESS)
   MOCK_METHOD(std::chrono::seconds, keepaliveHeaderTimeout, (), (const));
+  MOCK_METHOD(bool, retryOtherScopeWhenNotFound, (), (const));
 #endif
 
   std::unique_ptr<Http::InternalAddressConfig> internal_address_config_ =

@@ -243,6 +243,7 @@ public:
   bool addProxyProtocolConnectionState() const override { return true; }
 #if defined(HIGRESS)
   std::chrono::seconds keepaliveHeaderTimeout() const override { return keepalive_header_timeout_; }
+  bool retryOtherScopeWhenNotFound() const override { return retry_other_scope_when_not_found_; }
 #endif
 
   const envoy::extensions::filters::network::http_connection_manager::v3::HttpConnectionManager
@@ -299,6 +300,7 @@ public:
   std::unique_ptr<HttpConnectionManagerProto::ProxyStatusConfig> proxy_status_config_;
 #if defined(HIGRESS)
   std::chrono::seconds keepalive_header_timeout_{};
+  bool retry_other_scope_when_not_found_ = false;
 #endif
 };
 

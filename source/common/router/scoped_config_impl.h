@@ -178,6 +178,10 @@ public:
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr& scope_key) const override;
 
 #if defined(HIGRESS)
+  Router::ConfigConstSharedPtr
+  getRouteConfig(const ScopeKeyBuilder* scope_key_builder, const Http::HeaderMap& headers,
+                 const StreamInfo::StreamInfo* info,
+                 std::function<ScopeKeyPtr()>& recompute) const override;
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder* scope_key_builder,
                                               const Http::HeaderMap& headers,
                                               const StreamInfo::StreamInfo* info) const override;
@@ -202,6 +206,11 @@ public:
     return std::make_shared<const NullConfigImpl>();
   }
 #if defined(HIGRESS)
+  Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder*, const Http::HeaderMap&,
+                                              const StreamInfo::StreamInfo*,
+                                              std::function<ScopeKeyPtr()>&) const override {
+    return std::make_shared<const NullConfigImpl>();
+  }
   Router::ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder*, const Http::HeaderMap&,
                                               const StreamInfo::StreamInfo*) const override {
     return std::make_shared<const NullConfigImpl>();

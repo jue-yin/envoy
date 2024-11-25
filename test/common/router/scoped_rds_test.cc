@@ -253,6 +253,77 @@ scoped_routes:
             "foo");
 }
 
+#if defined(HIGRESS)
+TEST_F(InlineScopedRoutesTest, InlineWildcardDomainFallback) {
+  server_factory_context_.cluster_manager_.initializeClusters({"baz"}, {});
+  const std::string hcm_config = absl::StrCat(hcm_config_base, R"EOF(
+scoped_routes:
+  name: $0
+  scope_key_builder:
+    fragments:
+      - local_port_value_extractor: {}
+      - host_value_extractor: {}
+  scoped_route_configurations_list:
+    scoped_route_configurations:
+      - name: foo-scope
+        route_configuration:
+          name: foo
+          virtual_hosts:
+            - name: bar
+              domains: ["www.example.com"]
+              routes:
+                - match: { path: "/" }
+                  route: { cluster: baz }
+        key:
+          fragments:
+            - string_key: "80"
+            - string_key: www.example.com
+      - name: foo2-scope
+        route_configuration:
+          name: foo2
+          virtual_hosts:
+            - name: bar
+              domains: ["*.example.com"]
+              routes:
+                - match: { path: "/foo" }
+                  route: { cluster: baz }
+        key:
+          fragments:
+            - string_key: "80"
+            - string_key: "*.example.com"
+)EOF");
+  const auto config =
+      parseHttpConnectionManagerFromYaml(absl::Substitute(hcm_config, "foo-scoped-routes"));
+  Envoy::Config::ConfigProviderPtr provider = ScopedRoutesConfigProviderUtil::create(
+      config, server_factory_context_, context_init_manager_, "foo.", *config_provider_manager_);
+  Envoy::Router::ScopeKeyBuilderPtr scope_key_builder =
+      ScopedRoutesConfigProviderUtil::createScopeKeyBuilder(config);
+  ASSERT_THAT(provider->config<ScopedConfigImpl>(), Not(IsNull()));
+
+  NiceMock<Envoy::StreamInfo::MockStreamInfo> stream_info;
+  auto downstream_connection_info_provider = std::make_shared<Network::ConnectionInfoSetterImpl>(
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.1", 80),
+      std::make_shared<Network::Address::Ipv4Instance>("127.0.0.2", 1000));
+  ON_CALL(stream_info, downstreamAddressProvider())
+      .WillByDefault(ReturnPointee(downstream_connection_info_provider));
+
+  std::function<Router::ScopeKeyPtr()> recompute;
+  Http::TestRequestHeaderMapImpl headers = {{":authority", "www.example.com"},
+                                            {":path", "/foo"},
+                                            {":method", "GET"},
+                                            {":scheme", "http"},
+                                            {"x-forwarded-proto", "http"}};
+  auto route_config = provider->config<ScopedConfigImpl>()->getRouteConfig(
+      scope_key_builder.get(), headers, &stream_info, recompute);
+  EXPECT_EQ(route_config->name(), "foo");
+  EXPECT_EQ(route_config->route(headers, stream_info, 0), nullptr);
+  route_config = provider->config<ScopedConfigImpl>()->getRouteConfig(
+      scope_key_builder.get(), headers, &stream_info, recompute);
+  EXPECT_EQ(route_config->name(), "foo2");
+  EXPECT_NE(route_config->route(headers, stream_info, 0), nullptr);
+}
+#endif
+
 TEST_F(InlineScopedRoutesTest, ConfigLoadAndDump) {
   server_factory_context_.cluster_manager_.initializeClusters({"baz"}, {});
   timeSystem().setSystemTime(std::chrono::milliseconds(1234567891234));

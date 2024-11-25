@@ -178,6 +178,7 @@ public:
 
 #if defined(HIGRESS)
   std::chrono::seconds keepaliveHeaderTimeout() const override { return keepalive_header_timeout_; }
+  bool retryOtherScopeWhenNotFound() const override { return retry_other_scope_when_not_found_; }
 #endif
   // Simple helper to wrapper filter to the factory function.
   FilterFactoryCb createDecoderFilterFactoryCb(StreamDecoderFilterSharedPtr filter) {
@@ -282,6 +283,7 @@ public:
   bool add_proxy_protocol_connection_state_ = true;
 #if defined(HIGRESS)
   std::chrono::seconds keepalive_header_timeout_{};
+  bool retry_other_scope_when_not_found_ = true;
 #endif
 
   const LocalReply::LocalReplyPtr local_reply_;

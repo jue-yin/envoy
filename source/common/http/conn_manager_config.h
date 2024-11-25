@@ -545,6 +545,11 @@ public:
    * Zero indicates this behavior is disabled.
    */
   virtual std::chrono::seconds keepaliveHeaderTimeout() const PURE;
+  /**
+   * @return whether to retry to other scoped routes when the target route is not found in the
+   * current scope, supported only when using scoped_routes.
+   */
+  virtual bool retryOtherScopeWhenNotFound() const PURE;
 #endif
 };
 } // namespace Http

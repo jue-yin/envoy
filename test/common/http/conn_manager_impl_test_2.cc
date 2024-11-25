@@ -2753,7 +2753,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteNotFound) {
 #if defined(HIGRESS)
   EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
                   scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
-              getRouteConfig(_, _, _))
+              getRouteConfig(_, _, _, _))
       .Times(2)
       .WillRepeatedly(Return(nullptr));
 #else
@@ -2796,7 +2796,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsUpdate) {
 #if defined(HIGRESS)
   EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
                   scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
-              getRouteConfig(_, _, _))
+              getRouteConfig(_, _, _, _))
       .Times(3)
       .WillOnce(Return(nullptr))
       .WillOnce(Return(nullptr))        // refreshCachedRoute first time.
@@ -2870,19 +2870,21 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsCrossScopeReroute) {
 #if defined(HIGRESS)
   EXPECT_CALL(*static_cast<const Router::MockScopedConfig*>(
                   scopedRouteConfigProvider()->config<Router::ScopedConfig>().get()),
-              getRouteConfig(_, _, _))
+              getRouteConfig(_, _, _, _))
       // 1. Snap scoped route config;
       // 2. refreshCachedRoute (both in decodeHeaders(headers,end_stream);
       // 3. then refreshCachedRoute triggered by decoder_filters_[1]->callbacks_->route().
       .Times(3)
-      .WillRepeatedly(Invoke([&](const Router::ScopeKeyBuilder*, const Http::HeaderMap& headers,
-                                 const StreamInfo::StreamInfo*) -> Router::ConfigConstSharedPtr {
-        auto& test_headers = dynamic_cast<const TestRequestHeaderMapImpl&>(headers);
-        if (test_headers.get_("scope_key") == "foo") {
-          return route_config1;
-        }
-        return route_config2;
-      }));
+      .WillRepeatedly(
+          Invoke([&](const Router::ScopeKeyBuilder*, const Http::HeaderMap& headers,
+                     const StreamInfo::StreamInfo*,
+                     std::function<Router::ScopeKeyPtr()>&) -> Router::ConfigConstSharedPtr {
+            auto& test_headers = dynamic_cast<const TestRequestHeaderMapImpl&>(headers);
+            if (test_headers.get_("scope_key") == "foo") {
+              return route_config1;
+            }
+            return route_config2;
+          }));
 #else
   EXPECT_CALL(*static_cast<const Router::MockScopeKeyBuilder*>(scopeKeyBuilder().ptr()),
               computeScopeKey(_))
@@ -2959,7 +2961,7 @@ TEST_F(HttpConnectionManagerImplTest, TestSrdsRouteFound) {
   EXPECT_CALL(cluster_manager_, getThreadLocalCluster(_)).WillOnce(Return(fake_cluster1.get()));
 #if defined(HIGRESS)
   EXPECT_CALL(*scopedRouteConfigProvider()->config<Router::MockScopedConfig>(),
-              getRouteConfig(_, _, _))
+              getRouteConfig(_, _, _, _))
       // 1. decodeHeaders() snapping route config.
       // 2. refreshCachedRoute() later in the same decodeHeaders().
       .Times(2);

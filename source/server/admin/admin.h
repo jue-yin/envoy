@@ -229,6 +229,7 @@ public:
   bool addProxyProtocolConnectionState() const override { return true; }
 #if defined(HIGRESS)
   std::chrono::seconds keepaliveHeaderTimeout() const override { return {}; }
+  bool retryOtherScopeWhenNotFound() const override { return false; }
 #endif
 
 private:

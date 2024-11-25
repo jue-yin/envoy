@@ -486,6 +486,9 @@ private:
     // route configuration is updated frequently and the request is long-lived.
     Router::ConfigConstSharedPtr snapped_route_config_;
     Router::ScopedConfigConstSharedPtr snapped_scoped_routes_config_;
+#if defined(HIGRESS)
+    std::function<Router::ScopeKeyPtr()> snapped_scoped_routes_recompute_;
+#endif
     // This is used to track the route that has been cached in the request. And we will keep this
     // route alive until the request is finished.
     absl::optional<Router::RouteConstSharedPtr> cached_route_;

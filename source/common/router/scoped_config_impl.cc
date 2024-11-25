@@ -91,9 +91,10 @@ HostValueExtractorImpl::computeFragment(const Http::HeaderMap& headers,
   if (port_start != absl::string_view::npos) {
     host = host.substr(0, port_start);
   }
-  *recompute = [this, host, weak_recompute = ReComputeCbWeakPtr(recompute)]() mutable
-      -> std::unique_ptr<ScopeKeyFragmentBase> {
-    return reComputeHelper(std::string(host), weak_recompute, 0);
+  *recompute = [this, host_str = std::string(host),
+                weak_recompute = ReComputeCbWeakPtr(
+                    recompute)]() mutable -> std::unique_ptr<ScopeKeyFragmentBase> {
+    return reComputeHelper(host_str, weak_recompute, 0);
   };
   return std::make_unique<StringKeyFragment>(host);
 }
@@ -136,12 +137,13 @@ ScopeKeyPtr ScopeKeyBuilderImpl::computeScopeKey(const Http::HeaderMap& headers,
     recompute = [&recompute, recompute_cbs]() mutable -> ScopeKeyPtr {
       ScopeKey new_key;
       for (auto& cb : *recompute_cbs) {
+        if (*cb == nullptr) {
+          recompute = nullptr;
+          return nullptr;
+        }
         auto new_fragment = (*cb)();
         if (new_fragment == nullptr) {
           return nullptr;
-        }
-        if (*cb == nullptr) {
-          recompute = nullptr;
         }
         new_key.addFragment(std::move(new_fragment));
       }
@@ -171,10 +173,14 @@ ScopeKeyPtr ScopedConfigImpl::computeScopeKey(const ScopeKeyBuilder* scope_key_b
 
 Router::ConfigConstSharedPtr
 ScopedConfigImpl::getRouteConfig(const ScopeKeyBuilder* scope_key_builder,
-                                 const Http::HeaderMap& headers,
-                                 const StreamInfo::StreamInfo* info) const {
-  std::function<ScopeKeyPtr()> recompute;
-  ScopeKeyPtr scope_key = scope_key_builder->computeScopeKey(headers, info, recompute);
+                                 const Http::HeaderMap& headers, const StreamInfo::StreamInfo* info,
+                                 std::function<ScopeKeyPtr()>& recompute) const {
+  ScopeKeyPtr scope_key = nullptr;
+  if (recompute == nullptr) {
+    scope_key = scope_key_builder->computeScopeKey(headers, info, recompute);
+  } else {
+    scope_key = recompute();
+  }
   if (scope_key == nullptr) {
     return nullptr;
   }
@@ -187,6 +193,14 @@ ScopedConfigImpl::getRouteConfig(const ScopeKeyBuilder* scope_key_builder,
   } while (recompute != nullptr && (scope_key = recompute()));
 
   return nullptr;
+}
+
+Router::ConfigConstSharedPtr
+ScopedConfigImpl::getRouteConfig(const ScopeKeyBuilder* scope_key_builder,
+                                 const Http::HeaderMap& headers,
+                                 const StreamInfo::StreamInfo* info) const {
+  std::function<Router::ScopeKeyPtr()> recompute;
+  return getRouteConfig(scope_key_builder, headers, info, recompute);
 }
 
 #endif

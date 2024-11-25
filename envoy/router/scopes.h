@@ -123,11 +123,15 @@ public:
   virtual ConfigConstSharedPtr getRouteConfig(const ScopeKeyPtr& scope_key) const PURE;
 
 #if defined(HIGRESS)
-  virtual ConfigConstSharedPtr
-  getRouteConfig(const ScopeKeyBuilder* builder, const Http::HeaderMap& headers,
-                 const StreamInfo::StreamInfo* info = nullptr) const PURE;
+  virtual ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder* builder,
+                                              const Http::HeaderMap& headers,
+                                              const StreamInfo::StreamInfo* info) const PURE;
+  virtual ConfigConstSharedPtr getRouteConfig(const ScopeKeyBuilder* builder,
+                                              const Http::HeaderMap& headers,
+                                              const StreamInfo::StreamInfo* info,
+                                              std::function<ScopeKeyPtr()>& recompute) const PURE;
   virtual ScopeKeyPtr computeScopeKey(const ScopeKeyBuilder*, const Http::HeaderMap&,
-                                      const StreamInfo::StreamInfo* = nullptr) const {
+                                      const StreamInfo::StreamInfo*) const {
     return {};
   };
 #endif

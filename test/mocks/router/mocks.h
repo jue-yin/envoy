@@ -619,6 +619,10 @@ public:
   MOCK_METHOD(ConfigConstSharedPtr, getRouteConfig,
               (const ScopeKeyBuilder*, const Http::HeaderMap&, const StreamInfo::StreamInfo*),
               (const));
+  MOCK_METHOD(ConfigConstSharedPtr, getRouteConfig,
+              (const ScopeKeyBuilder*, const Http::HeaderMap&, const StreamInfo::StreamInfo*,
+               std::function<ScopeKeyPtr()>&),
+              (const));
 #endif
 
   std::shared_ptr<MockConfig> route_config_{new NiceMock<MockConfig>()};
