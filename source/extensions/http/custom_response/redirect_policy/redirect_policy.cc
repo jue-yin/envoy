@@ -64,6 +64,9 @@ RedirectPolicy::RedirectPolicy(
                                  createRedirectConfig(config.redirect_action()))
                            : nullptr},
 #if defined(HIGRESS)
+      uri_from_response_header_{config.has_uri_from_response_header()
+                                    ? absl::optional<std::string>(config.uri_from_response_header())
+                                    : absl::nullopt},
       use_original_request_uri_(
           PROTOBUF_GET_WRAPPED_OR_DEFAULT(config, use_original_request_uri, false)),
       keep_original_response_code_(
@@ -85,7 +88,8 @@ RedirectPolicy::RedirectPolicy(
       modify_request_headers_action_(createModifyRequestHeadersAction(config, context)) {
 #if defined(HIGRESS)
   // Ensure that exactly one of uri_ or redirect_action_ or use_original_request_uri_ is specified.
-  ASSERT(int(uri_ != nullptr) + int(redirect_action_ != nullptr) + int(use_original_request_uri_) ==
+  ASSERT(int(uri_ != nullptr) + int(redirect_action_ != nullptr) + int(use_original_request_uri_) +
+             int(uri_from_response_header_.has_value()) ==
          1);
 #else
   // Ensure that exactly one of uri_ or redirect_action_ is specified.
@@ -236,17 +240,33 @@ std::unique_ptr<ModifyRequestHeadersAction> RedirectPolicy::createModifyRequestH
     downstream_headers->setHost(real_original_host);
     downstream_headers->setPath(real_original_path);
   } else {
+    std::string uri;
+    if (uri_from_response_header_.has_value()) {
+      auto custom_location = headers.get(Envoy::Http::LowerCaseString(*uri_from_response_header_));
+      uri = custom_location.empty() ? "" : custom_location[0]->value().getStringView();
+      if (uri == "" || !absolute_url.initialize(uri, false)) {
+        stats_.custom_response_invalid_uri_.inc();
+        ENVOY_LOG(debug, "uri specified in response header is invalid");
+        return ::Envoy::Http::FilterHeadersStatus::Continue;
+      }
+    } else {
+      uri = uri_ ? *uri_ : ::Envoy::Http::Utility::newUri(*redirect_action_, *downstream_headers);
+#else
+  std::string uri(uri_ ? *uri_
+                       : ::Envoy::Http::Utility::newUri(*redirect_action_, *downstream_headers));
 #endif
-    std::string uri(uri_ ? *uri_
-                         : ::Envoy::Http::Utility::newUri(*redirect_action_, *downstream_headers));
-    if (!absolute_url.initialize(uri, false)) {
-      stats_.custom_response_invalid_uri_.inc();
-      // We could potentially get an invalid url only if redirect_action_ was specified instead
-      // of uri_. Hence, assert that uri_ is not set.
-      ENVOY_BUG(!static_cast<bool>(uri_),
-                "uri should not be invalid as this was already validated during config load");
-      return ::Envoy::Http::FilterHeadersStatus::Continue;
+
+      if (!absolute_url.initialize(uri, false)) {
+        stats_.custom_response_invalid_uri_.inc();
+        // We could potentially get an invalid url only if redirect_action_ was specified instead
+        // of uri_. Hence, assert that uri_ is not set.
+        ENVOY_BUG(!static_cast<bool>(uri_),
+                  "uri should not be invalid as this was already validated during config load");
+        return ::Envoy::Http::FilterHeadersStatus::Continue;
+      }
+#if defined(HIGRESS)
     }
+#endif
     downstream_headers->setScheme(absolute_url.scheme());
     downstream_headers->setHost(absolute_url.hostAndPort());
 

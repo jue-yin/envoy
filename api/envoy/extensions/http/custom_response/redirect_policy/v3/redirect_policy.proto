@@ -51,6 +51,8 @@ message RedirectPolicy {
     // - `regex_rewrite`
     config.route.v3.RedirectAction redirect_action = 2;
 
+    string uri_from_response_header = 106 [(validate.rules).string = {min_len: 1}];
+
     google.protobuf.BoolValue use_original_request_uri = 107;
   }
 

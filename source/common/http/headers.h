@@ -138,7 +138,12 @@ public:
     const LowerCaseString EnvoyOriginalHost{"original-host"};
     const LowerCaseString XEnvoyOriginalHost{"x-envoy-original-host"};
     const LowerCaseString XEnvoyRouteIdentifier{"x-envoy-route-identifier"};
+    const LowerCaseString XEnvoyInternalRoute{"x-envoy-internal-route"};
   } AliExtendedValues;
+
+  struct {
+    const std::string True{"true"};
+  } EnvoyIntenralRouteValues;
 #endif
 };
 

@@ -20,11 +20,7 @@ Http::FilterHeadersStatus CustomResponseFilter::decodeHeaders(Http::RequestHeade
   downstream_headers_ = &header_map;
   const FilterConfig* config = nullptr;
   if (decoder_callbacks_ && decoder_callbacks_->route()) {
-    const auto* config =
-        Http::Utility::resolveMostSpecificPerFilterConfig<FilterConfig>(decoder_callbacks_);
-    if (config != nullptr) {
-      has_rules_ = true;
-    }
+    config = Http::Utility::resolveMostSpecificPerFilterConfig<FilterConfig>(decoder_callbacks_);
   }
   if (config == nullptr) {
     config = config_.get();
@@ -77,24 +73,19 @@ Http::FilterHeadersStatus CustomResponseFilter::encodeHeaders(Http::ResponseHead
   // policy. Note that since the traversal is least to most specific, we can't
   // return early when a match is found.
   PolicySharedPtr policy;
-#if defined(HIGRESS)
-  if (has_rules_) {
-#endif
-    decoder_callbacks_->traversePerFilterConfig(
-        [&policy, &headers, this](const Router::RouteSpecificFilterConfig& config) {
-          const FilterConfig* typed_config = dynamic_cast<const FilterConfig*>(&config);
-          if (typed_config) {
-            // Check if a match is found first to avoid overwriting policy with an
-            // empty shared_ptr.
-            auto maybe_policy = typed_config->getPolicy(headers, encoder_callbacks_->streamInfo());
-            if (maybe_policy) {
-              policy = maybe_policy;
-            }
+  decoder_callbacks_->traversePerFilterConfig(
+      [&policy, &headers, this](const Router::RouteSpecificFilterConfig& config) {
+        const FilterConfig* typed_config = dynamic_cast<const FilterConfig*>(&config);
+        if (typed_config) {
+          // Check if a match is found first to avoid overwriting policy with an
+          // empty shared_ptr.
+          auto maybe_policy = typed_config->getPolicy(headers, encoder_callbacks_->streamInfo());
+          if (maybe_policy) {
+            policy = maybe_policy;
           }
-        });
-#if defined(HIGRESS)
-  }
-#endif
+        }
+      });
+
   if (!policy) {
     policy = config_->getPolicy(headers, encoder_callbacks_->streamInfo());
   }

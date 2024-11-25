@@ -1349,6 +1349,13 @@ void ConnectionManagerImpl::ActiveStream::decodeHeaders(RequestHeaderMapSharedPt
 
     filter_manager_.setDownstreamRemoteAddress(mutate_result.final_remote_address);
   }
+#if defined(HIGRESS)
+  else {
+    request_headers_->setReferenceKey(
+        Http::CustomHeaders::get().AliExtendedValues.XEnvoyInternalRoute,
+        Http::CustomHeaders::get().EnvoyIntenralRouteValues.True);
+  }
+#endif
   ASSERT(filter_manager_.streamInfo().downstreamAddressProvider().remoteAddress() != nullptr);
 
   ASSERT(!cached_route_);

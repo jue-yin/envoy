@@ -325,6 +325,9 @@ void ConnectionManagerUtility::cleanInternalHeaders(
   request_headers.removeEnvoyIpTags();
   request_headers.removeEnvoyOriginalUrl();
   request_headers.removeEnvoyHedgeOnPerTryTimeout();
+#if defined(HIGRESS)
+  request_headers.remove(Http::CustomHeaders::get().AliExtendedValues.XEnvoyInternalRoute);
+#endif
 
   for (const LowerCaseString& header : internal_only_headers) {
     request_headers.remove(header);
