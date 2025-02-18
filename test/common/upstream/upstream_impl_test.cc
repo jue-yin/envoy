@@ -270,6 +270,94 @@ TEST_F(StrictDnsClusterImplTest, ZeroHostsHealthChecker) {
   EXPECT_EQ(0UL, cluster.prioritySet().hostSetsPerPriority()[0]->healthyHosts().size());
 }
 
+#if defined(HIGRESS)
+TEST_F(StrictDnsClusterImplTest, HealthCheckNotStartBeforeInitTargetDone) {
+  ReadyWatcher initialized;
+
+  const std::string yaml = R"EOF(
+    name: name
+    connect_timeout: 0.25s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+        endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: foo.bar.com
+                    port_value: 443
+  )EOF";
+
+  ResolverData resolver(*dns_resolver_, server_context_.dispatcher_);
+  envoy::config::cluster::v3::Cluster cluster_config = parseClusterFromV3Yaml(yaml);
+
+  Envoy::Upstream::ClusterFactoryContextImpl factory_context(
+      server_context_, server_context_.cluster_manager_, nullptr, ssl_context_manager_, nullptr,
+      false);
+  StrictDnsClusterImpl cluster(cluster_config, factory_context, dns_resolver_);
+  auto& init_manager = cluster.initManager();
+  Init::ExpectableTargetImpl target("mock_sds_api");
+  init_manager.add(target);
+  target.expectInitialize();
+  std::shared_ptr<MockHealthChecker> health_checker(new MockHealthChecker());
+  EXPECT_CALL(*health_checker, start()).Times(0);
+  EXPECT_CALL(*health_checker, addHostCheckCompleteCb(_));
+  cluster.setHealthChecker(health_checker);
+  cluster.initialize([&]() -> void { initialized.ready(); });
+
+  EXPECT_CALL(*health_checker, addHostCheckCompleteCb(_)).Times(0);
+  EXPECT_CALL(initialized, ready()).Times(0);
+  EXPECT_CALL(*resolver.timer_, enableTimer(_, _));
+  resolver.dns_callback_(Network::DnsResolver::ResolutionStatus::Success, {});
+  EXPECT_EQ(0UL, cluster.prioritySet().hostSetsPerPriority()[0]->hosts().size());
+  EXPECT_EQ(0UL, cluster.prioritySet().hostSetsPerPriority()[0]->healthyHosts().size());
+}
+
+TEST_F(StrictDnsClusterImplTest, HealthCheckStartAfterInitTargetDone) {
+  ReadyWatcher initialized;
+
+  const std::string yaml = R"EOF(
+    name: name
+    connect_timeout: 0.25s
+    type: STRICT_DNS
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+        endpoints:
+          - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: foo.bar.com
+                    port_value: 443
+  )EOF";
+
+  ResolverData resolver(*dns_resolver_, server_context_.dispatcher_);
+  envoy::config::cluster::v3::Cluster cluster_config = parseClusterFromV3Yaml(yaml);
+
+  Envoy::Upstream::ClusterFactoryContextImpl factory_context(
+      server_context_, server_context_.cluster_manager_, nullptr, ssl_context_manager_, nullptr,
+      false);
+  StrictDnsClusterImpl cluster(cluster_config, factory_context, dns_resolver_);
+  auto& init_manager = cluster.initManager();
+  Init::ExpectableTargetImpl target("mock_sds_api");
+  init_manager.add(target);
+  target.expectInitializeWillCallReady();
+  std::shared_ptr<MockHealthChecker> health_checker(new MockHealthChecker());
+  EXPECT_CALL(*health_checker, start());
+  EXPECT_CALL(*health_checker, addHostCheckCompleteCb(_));
+  cluster.setHealthChecker(health_checker);
+  cluster.initialize([&]() -> void { initialized.ready(); });
+
+  EXPECT_CALL(*health_checker, addHostCheckCompleteCb(_));
+  EXPECT_CALL(initialized, ready());
+  EXPECT_CALL(*resolver.timer_, enableTimer(_, _));
+  resolver.dns_callback_(Network::DnsResolver::ResolutionStatus::Success, {});
+  EXPECT_EQ(0UL, cluster.prioritySet().hostSetsPerPriority()[0]->hosts().size());
+  EXPECT_EQ(0UL, cluster.prioritySet().hostSetsPerPriority()[0]->healthyHosts().size());
+}
+#endif
+
 TEST_F(StrictDnsClusterImplTest, DontWaitForDNSOnInit) {
   ResolverData resolver(*dns_resolver_, server_context_.dispatcher_);
 

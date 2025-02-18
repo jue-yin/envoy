@@ -333,13 +333,21 @@ bool ActiveStreamDecoderFilter::canContinue() {
   // continue to further filters. A concrete example of this is a filter buffering data, the
   // last data frame comes in and the filter continues, but the final buffering takes the stream
   // over the high watermark such that a 413 is returned.
+#if defined(HIGRESS)
+  return !parent_.state_.local_complete_ && !parent_.state_.continue_interrupted_;
+#else
   return !parent_.state_.local_complete_;
+#endif
 }
 
 bool ActiveStreamEncoderFilter::canContinue() {
   // As with ActiveStreamDecoderFilter::canContinue() make sure we do not
   // continue if a local reply has been sent.
+#if defined(HIGRESS)
+  return !parent_.state_.remote_encode_complete_ && !parent_.state_.continue_interrupted_;
+#else
   return !parent_.state_.remote_encode_complete_;
+#endif
 }
 
 Buffer::InstancePtr ActiveStreamDecoderFilter::createBuffer() {

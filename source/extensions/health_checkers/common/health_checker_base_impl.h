@@ -160,6 +160,9 @@ private:
   const std::shared_ptr<const Network::TransportSocketOptionsImpl> transport_socket_options_;
   const MetadataConstSharedPtr transport_socket_match_metadata_;
   const Common::CallbackHandlePtr member_update_cb_;
+#if defined(HIGRESS)
+  bool started_{false};
+#endif
 };
 
 } // namespace Upstream

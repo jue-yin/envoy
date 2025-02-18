@@ -2216,6 +2216,9 @@ void ConnectionManagerImpl::ActiveStream::recreateStream(
       request_data->move(*buffered_request_data);
     }
   }
+  // Prevent the stream from being used through the commonContinue process of
+  // ActiveStreamDecoderFilter or ActiveStreamEncoderFilter.
+  filter_manager_.interruptContinue();
 #else
   const auto& buffered_request_data = filter_manager_.bufferedRequestData();
   const bool proxy_body = buffered_request_data != nullptr && buffered_request_data->length() > 0;

@@ -163,10 +163,24 @@ void HealthCheckerImplBase::addHosts(const HostVector& hosts) {
     if (host->disableActiveHealthCheck()) {
       continue;
     }
+#if defined(HIGRESS)
+    if (active_sessions_.find(host) != active_sessions_.end()) {
+      continue;
+    }
+    active_sessions_[host] = makeSession(host);
+    host->setHealthChecker(
+        HealthCheckHostMonitorPtr{new HealthCheckHostMonitorImpl(shared_from_this(), host)});
+    if (started_) {
+      // Because EDS and SDS are not synchronized, if SDS has not yet completed when it is started,
+      // it will cause the health check to fail.
+      active_sessions_[host]->start();
+    }
+#else
     active_sessions_[host] = makeSession(host);
     host->setHealthChecker(
         HealthCheckHostMonitorPtr{new HealthCheckHostMonitorImpl(shared_from_this(), host)});
     active_sessions_[host]->start();
+#endif
   }
 }
 
@@ -230,9 +244,25 @@ void HealthCheckerImplBase::setUnhealthyCrossThread(const HostSharedPtr& host,
 }
 
 void HealthCheckerImplBase::start() {
+#if defined(HIGRESS)
+  if (started_) {
+    return;
+  }
+  for (auto& host_set : cluster_.prioritySet().hostSetsPerPriority()) {
+    // It appears to be a duplicate addition since onClusterMemberUpdate has already been added
+    // once. However, considering the case of HDS, which does not call onClusterMemberUpdate, it
+    // needs to be added here.
+    addHosts(host_set->hosts());
+  }
+  for (auto& session_iter : active_sessions_) {
+    session_iter.second->start();
+  }
+  started_ = true;
+#else
   for (auto& host_set : cluster_.prioritySet().hostSetsPerPriority()) {
     addHosts(host_set->hosts());
   }
+#endif
 }
 
 HealthCheckerImplBase::ActiveHealthCheckSession::ActiveHealthCheckSession(

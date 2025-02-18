@@ -805,6 +805,10 @@ public:
    */
   void setLocalComplete() { state_.local_complete_ = true; }
 
+#if defined(HIGRESS)
+  void interruptContinue() { state_.continue_interrupted_ = true; }
+#endif
+
   /**
    * Whether the filters have been destroyed.
    */
@@ -884,6 +888,10 @@ protected:
     bool encoder_filters_streaming_{true};
     bool decoder_filters_streaming_{true};
     bool destroyed_{false};
+
+#if defined(HIGRESS)
+    bool continue_interrupted_{false};
+#endif
 
     // Used to track which filter is the latest filter that has received data.
     ActiveStreamEncoderFilter* latest_data_encoding_filter_{};

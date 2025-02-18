@@ -2119,6 +2119,101 @@ TEST_F(HttpConnectionManagerImplTest, AddDataWithStopAndContinue) {
   encoder_filters_[2]->callbacks_->continueEncoding();
 }
 
+#if defined(HIGRESS)
+TEST_F(HttpConnectionManagerImplTest, CannotContinueDecodingAfterRecreateStream) {
+  setup(false, "");
+  decoder_filters_.push_back(new NiceMock<MockStreamDecoderFilter>());
+  decoder_filters_.push_back(new NiceMock<MockStreamDecoderFilter>());
+
+  EXPECT_CALL(filter_factory_, createFilterChain(_))
+      .WillOnce(Invoke([this](FilterChainManager& manager) -> bool {
+        bool applied_filters = false;
+        if (log_handler_.get()) {
+          auto factory = createLogHandlerFactoryCb(log_handler_);
+          manager.applyFilterFactoryCb({}, factory);
+          applied_filters = true;
+        }
+        for (int i = 0; i < 2; i++) {
+          auto factory =
+              createDecoderFilterFactoryCb(StreamDecoderFilterSharedPtr{decoder_filters_[i]});
+          manager.applyFilterFactoryCb({}, factory);
+          applied_filters = true;
+        }
+        return applied_filters;
+      }))
+      .WillOnce(Return(true));
+
+  EXPECT_CALL(*decoder_filters_[0], decodeHeaders(_, true))
+      .WillOnce(InvokeWithoutArgs([&]() -> FilterHeadersStatus {
+        decoder_filters_[0]->callbacks_->recreateStream(nullptr);
+        return FilterHeadersStatus::StopIteration;
+      }));
+
+  // Kick off the request.
+  startRequest(true);
+
+  // Should not continue headers of filter 1.
+  EXPECT_CALL(*decoder_filters_[1], decodeHeaders(_, true)).Times(0);
+  decoder_filters_[0]->callbacks_->continueDecoding();
+  filter_callbacks_.connection_.raiseEvent(Network::ConnectionEvent::RemoteClose);
+}
+
+TEST_F(HttpConnectionManagerImplTest, CannotContinueEncodingAfterRecreateStream) {
+  setup(false, "");
+  decoder_filters_.push_back(new NiceMock<MockStreamDecoderFilter>());
+  decoder_filters_.push_back(new NiceMock<MockStreamDecoderFilter>());
+  encoder_filters_.push_back(new NiceMock<MockStreamEncoderFilter>());
+  encoder_filters_.push_back(new NiceMock<MockStreamEncoderFilter>());
+
+  EXPECT_CALL(filter_factory_, createFilterChain(_))
+      .WillOnce(Invoke([this](FilterChainManager& manager) -> bool {
+        bool applied_filters = false;
+        if (log_handler_.get()) {
+          auto factory = createLogHandlerFactoryCb(log_handler_);
+          manager.applyFilterFactoryCb({}, factory);
+          applied_filters = true;
+        }
+        for (int i = 0; i < 2; i++) {
+          auto factory =
+              createDecoderFilterFactoryCb(StreamDecoderFilterSharedPtr{decoder_filters_[i]});
+          manager.applyFilterFactoryCb({}, factory);
+          applied_filters = true;
+        }
+        for (int i = 0; i < 2; i++) {
+          auto factory =
+              createEncoderFilterFactoryCb(StreamEncoderFilterSharedPtr{encoder_filters_[i]});
+          manager.applyFilterFactoryCb({}, factory);
+          applied_filters = true;
+        }
+        return applied_filters;
+      }))
+      .WillOnce(Return(true));
+
+  EXPECT_CALL(*decoder_filters_[0], decodeHeaders(_, true))
+      .WillOnce(Return(FilterHeadersStatus::Continue));
+  EXPECT_CALL(*decoder_filters_[1], decodeHeaders(_, true))
+      .WillOnce(Return(FilterHeadersStatus::StopIteration));
+
+  // Kick off the request.
+  startRequest(true);
+
+  EXPECT_CALL(*encoder_filters_[1], encodeHeaders(_, true))
+      .WillOnce(InvokeWithoutArgs([&]() -> FilterHeadersStatus {
+        decoder_filters_[1]->callbacks_->recreateStream(nullptr);
+        return FilterHeadersStatus::StopIteration;
+      }));
+
+  decoder_filters_[1]->callbacks_->streamInfo().setResponseCodeDetails("");
+  decoder_filters_[1]->callbacks_->encodeHeaders(
+      ResponseHeaderMapPtr{new TestResponseHeaderMapImpl{{":status", "200"}}}, true, "details");
+
+  // Should not continue headers of filter 0.
+  EXPECT_CALL(*encoder_filters_[0], encodeHeaders(_, true)).Times(0);
+  encoder_filters_[1]->callbacks_->continueEncoding();
+  filter_callbacks_.connection_.raiseEvent(Network::ConnectionEvent::RemoteClose);
+}
+#endif
+
 // Use filter direct decode/encodeData() calls without trailers.
 TEST_F(HttpConnectionManagerImplTest, FilterDirectDecodeEncodeDataNoTrailers) {
   setup(false, "");

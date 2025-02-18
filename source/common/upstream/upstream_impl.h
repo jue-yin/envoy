@@ -1188,6 +1188,10 @@ public:
   Outlier::Detector* outlierDetector() override { return outlier_detector_.get(); }
   const Outlier::Detector* outlierDetector() const override { return outlier_detector_.get(); }
   void initialize(std::function<void()> callback) override;
+#if defined(HIGRESS)
+  // only for test
+  Init::ManagerImpl& initManager() { return init_manager_; }
+#endif
 
 protected:
   ClusterImplBase(const envoy::config::cluster::v3::Cluster& cluster,
