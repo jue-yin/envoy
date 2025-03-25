@@ -19,6 +19,7 @@ package http
 
 import (
 	"strconv"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -31,20 +32,16 @@ const (
 	errFilterDestroyed = "golang filter has been destroyed"
 	errNotInGo         = "not proccessing Go"
 	errInvalidPhase    = "invalid phase, maybe headers/buffer already continued"
+	errInvalidScene    = "invalid scene for this API"
 )
 
 // api.HeaderMap
 type headerMapImpl struct {
-	request     *httpRequest
+	state       *processState
 	headers     map[string][]string
 	headerNum   uint64
 	headerBytes uint64
 	mutex       sync.Mutex
-}
-
-// ByteSize return size of HeaderMap
-func (h *headerMapImpl) ByteSize() uint64 {
-	return h.headerBytes
 }
 
 type requestOrResponseHeaderMapImpl struct {
@@ -53,17 +50,17 @@ type requestOrResponseHeaderMapImpl struct {
 
 func (h *requestOrResponseHeaderMapImpl) initHeaders() {
 	if h.headers == nil {
-		h.headers = cAPI.HttpCopyHeaders(unsafe.Pointer(h.request.req), h.headerNum, h.headerBytes)
+		h.headers = cAPI.HttpCopyHeaders(unsafe.Pointer(h.state), h.headerNum, h.headerBytes)
 	}
 }
 
 func (h *requestOrResponseHeaderMapImpl) GetRaw(key string) string {
-	var value string
-	cAPI.HttpGetHeader(unsafe.Pointer(h.request.req), &key, &value)
-	return value
+	// GetRaw is case-sensitive
+	return cAPI.HttpGetHeader(unsafe.Pointer(h.state), key)
 }
 
 func (h *requestOrResponseHeaderMapImpl) Get(key string) (string, bool) {
+	key = strings.ToLower(key)
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.initHeaders()
@@ -75,6 +72,7 @@ func (h *requestOrResponseHeaderMapImpl) Get(key string) (string, bool) {
 }
 
 func (h *requestOrResponseHeaderMapImpl) Values(key string) []string {
+	key = strings.ToLower(key)
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.initHeaders()
@@ -86,6 +84,7 @@ func (h *requestOrResponseHeaderMapImpl) Values(key string) []string {
 }
 
 func (h *requestOrResponseHeaderMapImpl) Set(key, value string) {
+	key = strings.ToLower(key)
 	// Get all header values first before setting a value, since the set operation may not take affects immediately
 	// when it's invoked in a Go thread, instead, it will post a callback to run in the envoy worker thread.
 	// Otherwise, we may get outdated values in a following Get call.
@@ -95,10 +94,11 @@ func (h *requestOrResponseHeaderMapImpl) Set(key, value string) {
 	if h.headers != nil {
 		h.headers[key] = []string{value}
 	}
-	cAPI.HttpSetHeader(unsafe.Pointer(h.request.req), &key, &value, false)
+	cAPI.HttpSetHeader(unsafe.Pointer(h.state), key, value, false)
 }
 
 func (h *requestOrResponseHeaderMapImpl) Add(key, value string) {
+	key = strings.ToLower(key)
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.initHeaders()
@@ -109,10 +109,11 @@ func (h *requestOrResponseHeaderMapImpl) Add(key, value string) {
 			h.headers[key] = []string{value}
 		}
 	}
-	cAPI.HttpSetHeader(unsafe.Pointer(h.request.req), &key, &value, true)
+	cAPI.HttpSetHeader(unsafe.Pointer(h.state), key, value, true)
 }
 
 func (h *requestOrResponseHeaderMapImpl) Del(key string) {
+	key = strings.ToLower(key)
 	// Get all header values first before removing a key, since the del operation may not take affects immediately
 	// when it's invoked in a Go thread, instead, it will post a callback to run in the envoy worker thread.
 	// Otherwise, we may get outdated values in a following Get call.
@@ -120,7 +121,7 @@ func (h *requestOrResponseHeaderMapImpl) Del(key string) {
 	defer h.mutex.Unlock()
 	h.initHeaders()
 	delete(h.headers, key)
-	cAPI.HttpRemoveHeader(unsafe.Pointer(h.request.req), &key)
+	cAPI.HttpRemoveHeader(unsafe.Pointer(h.state), key)
 }
 
 func (h *requestOrResponseHeaderMapImpl) Range(f func(key, value string) bool) {
@@ -155,17 +156,24 @@ func (h *requestOrResponseHeaderMapImpl) RangeWithCopy(f func(key, value string)
 	}
 }
 
+func (h *requestOrResponseHeaderMapImpl) GetAllHeaders() map[string][]string {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	h.initHeaders()
+	copiedHeaders := make(map[string][]string)
+	for key, value := range h.headers {
+		copiedHeaders[key] = make([]string, len(value))
+		copy(copiedHeaders[key], value)
+	}
+	return copiedHeaders
+}
+
 // api.RequestHeaderMap
 type requestHeaderMapImpl struct {
 	requestOrResponseHeaderMapImpl
 }
 
 var _ api.RequestHeaderMap = (*requestHeaderMapImpl)(nil)
-
-func (h *requestHeaderMapImpl) Protocol() string {
-	v, _ := h.Get(":protocol")
-	return v
-}
 
 func (h *requestHeaderMapImpl) Scheme() string {
 	v, _ := h.Get(":scheme")
@@ -185,6 +193,18 @@ func (h *requestHeaderMapImpl) Path() string {
 func (h *requestHeaderMapImpl) Host() string {
 	v, _ := h.Get(":authority")
 	return v
+}
+
+func (h *requestHeaderMapImpl) SetMethod(method string) {
+	h.Set(":method", method)
+}
+
+func (h *requestHeaderMapImpl) SetPath(path string) {
+	h.Set(":path", path)
+}
+
+func (h *requestHeaderMapImpl) SetHost(host string) {
+	h.Set(":authority", host)
 }
 
 // api.ResponseHeaderMap
@@ -208,17 +228,16 @@ type requestOrResponseTrailerMapImpl struct {
 
 func (h *requestOrResponseTrailerMapImpl) initTrailers() {
 	if h.headers == nil {
-		h.headers = cAPI.HttpCopyTrailers(unsafe.Pointer(h.request.req), h.headerNum, h.headerBytes)
+		h.headers = cAPI.HttpCopyTrailers(unsafe.Pointer(h.state), h.headerNum, h.headerBytes)
 	}
 }
 
 func (h *requestOrResponseTrailerMapImpl) GetRaw(key string) string {
-	var value string
-	cAPI.HttpGetHeader(unsafe.Pointer(h.request.req), &key, &value)
-	return value
+	return cAPI.HttpGetHeader(unsafe.Pointer(h.state), key)
 }
 
 func (h *requestOrResponseTrailerMapImpl) Get(key string) (string, bool) {
+	key = strings.ToLower(key)
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.initTrailers()
@@ -230,6 +249,7 @@ func (h *requestOrResponseTrailerMapImpl) Get(key string) (string, bool) {
 }
 
 func (h *requestOrResponseTrailerMapImpl) Values(key string) []string {
+	key = strings.ToLower(key)
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.initTrailers()
@@ -241,6 +261,7 @@ func (h *requestOrResponseTrailerMapImpl) Values(key string) []string {
 }
 
 func (h *requestOrResponseTrailerMapImpl) Set(key, value string) {
+	key = strings.ToLower(key)
 	// Get all header values first before setting a value, since the set operation may not take affects immediately
 	// when it's invoked in a Go thread, instead, it will post a callback to run in the envoy worker thread.
 	// Otherwise, we may get outdated values in a following Get call.
@@ -251,10 +272,11 @@ func (h *requestOrResponseTrailerMapImpl) Set(key, value string) {
 		h.headers[key] = []string{value}
 	}
 
-	cAPI.HttpSetTrailer(unsafe.Pointer(h.request.req), &key, &value, false)
+	cAPI.HttpSetTrailer(unsafe.Pointer(h.state), key, value, false)
 }
 
 func (h *requestOrResponseTrailerMapImpl) Add(key, value string) {
+	key = strings.ToLower(key)
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.initTrailers()
@@ -265,15 +287,16 @@ func (h *requestOrResponseTrailerMapImpl) Add(key, value string) {
 			h.headers[key] = []string{value}
 		}
 	}
-	cAPI.HttpSetTrailer(unsafe.Pointer(h.request.req), &key, &value, true)
+	cAPI.HttpSetTrailer(unsafe.Pointer(h.state), key, value, true)
 }
 
 func (h *requestOrResponseTrailerMapImpl) Del(key string) {
+	key = strings.ToLower(key)
 	h.mutex.Lock()
 	defer h.mutex.Unlock()
 	h.initTrailers()
 	delete(h.headers, key)
-	cAPI.HttpRemoveTrailer(unsafe.Pointer(h.request.req), &key)
+	cAPI.HttpRemoveTrailer(unsafe.Pointer(h.state), key)
 }
 
 func (h *requestOrResponseTrailerMapImpl) Range(f func(key, value string) bool) {
@@ -308,6 +331,18 @@ func (h *requestOrResponseTrailerMapImpl) RangeWithCopy(f func(key, value string
 	}
 }
 
+func (h *requestOrResponseTrailerMapImpl) GetAllHeaders() map[string][]string {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+	h.initTrailers()
+	copiedHeaders := make(map[string][]string)
+	for key, value := range h.headers {
+		copiedHeaders[key] = make([]string, len(value))
+		copy(copiedHeaders[key], value)
+	}
+	return copiedHeaders
+}
+
 // api.RequestTrailerMap
 type requestTrailerMapImpl struct {
 	requestOrResponseTrailerMapImpl
@@ -324,26 +359,31 @@ var _ api.ResponseTrailerMap = (*responseTrailerMapImpl)(nil)
 
 // api.BufferInstance
 type httpBuffer struct {
-	request             *httpRequest
+	state               *processState
 	envoyBufferInstance uint64
 	length              uint64
-	value               string
+	value               []byte
 }
 
 var _ api.BufferInstance = (*httpBuffer)(nil)
 
 func (b *httpBuffer) Write(p []byte) (n int, err error) {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, string(p), api.AppendBuffer)
-	return len(p), nil
+	cAPI.HttpSetBytesBufferHelper(unsafe.Pointer(b.state), b.envoyBufferInstance, p, api.AppendBuffer)
+	n = len(p)
+	b.length += uint64(n)
+	return n, nil
 }
 
 func (b *httpBuffer) WriteString(s string) (n int, err error) {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, s, api.AppendBuffer)
-	return len(s), nil
+	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.state), b.envoyBufferInstance, s, api.AppendBuffer)
+	n = len(s)
+	b.length += uint64(n)
+	return n, nil
 }
 
 func (b *httpBuffer) WriteByte(p byte) error {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, string(p), api.AppendBuffer)
+	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.state), b.envoyBufferInstance, string(p), api.AppendBuffer)
+	b.length++
 	return nil
 }
 
@@ -360,25 +400,32 @@ func (b *httpBuffer) WriteUint32(p uint32) error {
 }
 
 func (b *httpBuffer) WriteUint64(p uint64) error {
-	s := strconv.FormatUint(uint64(p), 10)
+	s := strconv.FormatUint(p, 10)
 	_, err := b.WriteString(s)
 	return err
-}
-
-func (b *httpBuffer) Peek(n int) []byte {
-	panic("implement me")
 }
 
 func (b *httpBuffer) Bytes() []byte {
 	if b.length == 0 {
 		return nil
 	}
-	cAPI.HttpGetBuffer(unsafe.Pointer(b.request.req), b.envoyBufferInstance, &b.value, b.length)
-	return []byte(b.value)
+	b.value = cAPI.HttpGetBuffer(unsafe.Pointer(b.state), b.envoyBufferInstance, b.length)
+	return b.value
 }
 
 func (b *httpBuffer) Drain(offset int) {
-	panic("implement me")
+	if offset <= 0 || b.length == 0 {
+		return
+	}
+
+	size := uint64(offset)
+	if size > b.length {
+		size = b.length
+	}
+
+	cAPI.HttpDrainBuffer(unsafe.Pointer(b.state), b.envoyBufferInstance, size)
+
+	b.length -= size
 }
 
 func (b *httpBuffer) Len() int {
@@ -386,43 +433,47 @@ func (b *httpBuffer) Len() int {
 }
 
 func (b *httpBuffer) Reset() {
-	panic("implement me")
+	b.Drain(b.Len())
 }
 
 func (b *httpBuffer) String() string {
 	if b.length == 0 {
 		return ""
 	}
-	cAPI.HttpGetBuffer(unsafe.Pointer(b.request.req), b.envoyBufferInstance, &b.value, b.length)
-	return b.value
+	b.value = cAPI.HttpGetBuffer(unsafe.Pointer(b.state), b.envoyBufferInstance, b.length)
+	return string(b.value)
 }
 
 func (b *httpBuffer) Append(data []byte) error {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, string(data), api.AppendBuffer)
-	return nil
+	_, err := b.Write(data)
+	return err
 }
 
 func (b *httpBuffer) Prepend(data []byte) error {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, string(data), api.PrependBuffer)
+	cAPI.HttpSetBytesBufferHelper(unsafe.Pointer(b.state), b.envoyBufferInstance, data, api.PrependBuffer)
+	b.length += uint64(len(data))
 	return nil
 }
 
 func (b *httpBuffer) AppendString(s string) error {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, s, api.AppendBuffer)
-	return nil
+	_, err := b.WriteString(s)
+	return err
 }
 
 func (b *httpBuffer) PrependString(s string) error {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, s, api.PrependBuffer)
+	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.state), b.envoyBufferInstance, s, api.PrependBuffer)
+	b.length += uint64(len(s))
 	return nil
 }
 
 func (b *httpBuffer) Set(data []byte) error {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, string(data), api.SetBuffer)
+	cAPI.HttpSetBytesBufferHelper(unsafe.Pointer(b.state), b.envoyBufferInstance, data, api.SetBuffer)
+	b.length = uint64(len(data))
 	return nil
 }
 
 func (b *httpBuffer) SetString(s string) error {
-	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.request.req), b.envoyBufferInstance, s, api.SetBuffer)
+	cAPI.HttpSetBufferHelper(unsafe.Pointer(b.state), b.envoyBufferInstance, s, api.SetBuffer)
+	b.length = uint64(len(s))
 	return nil
 }

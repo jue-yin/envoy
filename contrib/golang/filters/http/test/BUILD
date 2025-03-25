@@ -14,9 +14,8 @@ envoy_cc_test(
     name = "config_test",
     srcs = ["config_test.cc"],
     data = [
-        "//contrib/golang/filters/http/test/test_data/passthrough:filter.so",
+        "//contrib/golang/filters/http/test/test_data:plugins.so",
     ],
-    env = {"GODEBUG": "cgocheck=0"},
     deps = [
         "//contrib/golang/filters/http/source:config",
         "//test/mocks/server:factory_context_mocks",
@@ -28,10 +27,8 @@ envoy_cc_test(
     name = "golang_filter_test",
     srcs = ["golang_filter_test.cc"],
     data = [
-        "//contrib/golang/filters/http/test/test_data/passthrough:filter.so",
-        "//contrib/golang/filters/http/test/test_data/routeconfig:filter.so",
+        "//contrib/golang/filters/http/test/test_data:plugins.so",
     ],
-    env = {"GODEBUG": "cgocheck=0"},
     deps = [
         "//contrib/golang/filters/http/source:golang_filter_lib",
         "//source/common/stream_info:stream_info_lib",
@@ -52,12 +49,8 @@ envoy_cc_test(
     name = "golang_integration_test",
     srcs = ["golang_integration_test.cc"],
     data = [
-        "//contrib/golang/filters/http/test/test_data/basic:filter.so",
-        "//contrib/golang/filters/http/test/test_data/echo:filter.so",
-        "//contrib/golang/filters/http/test/test_data/passthrough:filter.so",
-        "//contrib/golang/filters/http/test/test_data/routeconfig:filter.so",
+        "//contrib/golang/filters/http/test/test_data:plugins.so",
     ],
-    env = {"GODEBUG": "cgocheck=0"},
     deps = [
         "//contrib/golang/filters/http/source:config",
         "//source/exe:main_common_lib",
@@ -93,5 +86,28 @@ envoy_cc_fuzz_test(
         "//test/mocks/runtime:runtime_mocks",
         "//test/mocks/server:factory_context_mocks",
         "@envoy_api//contrib/envoy/extensions/filters/http/golang/v3alpha:pkg_cc_proto",
+    ],
+)
+
+envoy_cc_test(
+    name = "websocket_integration_test",
+    size = "large",
+    srcs = ["websocket_integration_test.cc"],
+    data = [
+        "//contrib/golang/filters/http/test/test_data:plugins.so",
+    ],
+    tags = [
+        "cpu:3",
+    ],
+    deps = [
+        "//contrib/golang/filters/http/source:config",
+        "//source/common/http:header_map_lib",
+        "//source/extensions/access_loggers/file:config",
+        "//source/extensions/filters/http/buffer:config",
+        "//test/integration:http_protocol_integration_lib",
+        "//test/integration:websocket_integration_test_lib",
+        "//test/test_common:utility_lib",
+        "@envoy_api//envoy/config/bootstrap/v3:pkg_cc_proto",
+        "@envoy_api//envoy/extensions/filters/network/http_connection_manager/v3:pkg_cc_proto",
     ],
 )

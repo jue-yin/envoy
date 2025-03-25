@@ -17,6 +17,8 @@
 
 package api
 
+import "errors"
+
 // ****************** filter status start ******************//
 type StatusType int
 
@@ -107,16 +109,19 @@ type HeaderMap interface {
 
 	// Set key-value pair in header map, the previous pair will be replaced if exists.
 	// It may not take affects immediately in the Envoy thread side when it's invoked in a Go thread.
+	// This won't refresh route cache, please invoke ClearRouteCache if needed.
 	Set(key, value string)
 
 	// Add value for given key.
 	// Multiple headers with the same key may be added with this function.
 	// Use Set for setting a single header for the given key.
 	// It may not take affects immediately in the Envoy thread side when it's invoked in a Go thread.
+	// This won't refresh route cache, please invoke ClearRouteCache if needed.
 	Add(key, value string)
 
 	// Del delete pair of specified key
 	// It may not take affects immediately in the Envoy thread side when it's invoked in a Go thread.
+	// This won't refresh route cache, please invoke ClearRouteCache if needed.
 	Del(key string)
 
 	// Range calls f sequentially for each key and value present in the map.
@@ -127,17 +132,26 @@ type HeaderMap interface {
 	// RangeWithCopy calls f sequentially for each key and value copied from the map.
 	RangeWithCopy(f func(key, value string) bool)
 
-	// ByteSize return size of HeaderMap
-	ByteSize() uint64
+	// GetAllHeaders returns all the headers.
+	GetAllHeaders() map[string][]string
 }
 
 type RequestHeaderMap interface {
 	HeaderMap
-	Protocol() string
 	Scheme() string
 	Method() string
 	Host() string
 	Path() string
+	// SetMethod set method in header map
+	// This won't refresh route cache, please invoke ClearRouteCache if needed.
+	SetMethod(method string)
+	// SetHost set host in header map
+	// This won't refresh route cache, please invoke ClearRouteCache if needed.
+	SetHost(host string)
+	// SetPath set path in header map
+	// This won't refresh route cache, please invoke ClearRouteCache if needed.
+	SetPath(path string)
+	// Note: Scheme is the downstream protocol, we'd better not override it.
 }
 
 type RequestTrailerMap interface {
@@ -200,12 +214,6 @@ type DataBufferBase interface {
 	// buffer becomes too large, Write will panic with ErrTooLarge.
 	WriteUint64(p uint64) error
 
-	// Peek returns n bytes from buffer, without draining any buffered data.
-	// If n > readable buffer, nil will be returned.
-	// It can be used in codec to check first-n-bytes magic bytes
-	// Note: do not change content in return bytes, use write instead
-	Peek(n int) []byte
-
 	// Bytes returns all bytes from buffer, without draining any buffered data.
 	// It can be used to get fixed-length content, such as headers, body.
 	// Note: do not change content in return bytes, use write instead
@@ -255,6 +263,25 @@ type DestroyReason int
 const (
 	Normal    DestroyReason = 0
 	Terminate DestroyReason = 1
+)
+
+// For each AccessLogType's meaning, see
+// https://www.envoyproxy.io/docs/envoy/latest/configuration/observability/access_log/usage
+// Currently, only some downstream access log types are supported
+type AccessLogType int
+
+const (
+	AccessLogNotSet                                  AccessLogType = 0
+	AccessLogTcpUpstreamConnected                    AccessLogType = 1
+	AccessLogTcpPeriodic                             AccessLogType = 2
+	AccessLogTcpConnectionEnd                        AccessLogType = 3
+	AccessLogDownstreamStart                         AccessLogType = 4
+	AccessLogDownstreamPeriodic                      AccessLogType = 5
+	AccessLogDownstreamEnd                           AccessLogType = 6
+	AccessLogUpstreamPoolReady                       AccessLogType = 7
+	AccessLogUpstreamPeriodic                        AccessLogType = 8
+	AccessLogUpstreamEnd                             AccessLogType = 9
+	AccessLogDownstreamTunnelSuccessfullyEstablished AccessLogType = 10
 )
 
 const (
@@ -408,3 +435,13 @@ func (t ConnectionInfoType) String() string {
 	}
 	return "unknown"
 }
+
+// *************** errors start **************//
+var (
+	ErrInternalFailure = errors.New("internal failure")
+	ErrValueNotFound   = errors.New("value not found")
+	// Failed to serialize the value when we fetch the value as string
+	ErrSerializationFailure = errors.New("serialization failure")
+)
+
+// *************** errors end **************//

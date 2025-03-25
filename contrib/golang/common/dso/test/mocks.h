@@ -11,17 +11,22 @@ public:
   MockHttpFilterDsoImpl();
   ~MockHttpFilterDsoImpl() override;
 
-  MOCK_METHOD(GoUint64, envoyGoFilterNewHttpPluginConfig,
-              (GoUint64 p0, GoUint64 p1, GoUint64 p2, GoUint64 p3));
+  MOCK_METHOD(GoUint64, envoyGoFilterNewHttpPluginConfig, (httpConfig * p0));
   MOCK_METHOD(GoUint64, envoyGoFilterMergeHttpPluginConfig,
               (GoUint64 p0, GoUint64 p1, GoUint64 p2, GoUint64 p3));
-  MOCK_METHOD(void, envoyGoFilterDestroyHttpPluginConfig, (GoUint64 p0));
+  MOCK_METHOD(void, envoyGoFilterDestroyHttpPluginConfig, (GoUint64 p0, GoInt p1));
   MOCK_METHOD(GoUint64, envoyGoFilterOnHttpHeader,
-              (httpRequest * p0, GoUint64 p1, GoUint64 p2, GoUint64 p3));
+              (processState * p0, GoUint64 p1, GoUint64 p2, GoUint64 p3));
   MOCK_METHOD(GoUint64, envoyGoFilterOnHttpData,
-              (httpRequest * p0, GoUint64 p1, GoUint64 p2, GoUint64 p3));
+              (processState * p0, GoUint64 p1, GoUint64 p2, GoUint64 p3));
+  MOCK_METHOD(void, envoyGoFilterOnHttpLog,
+              (httpRequest * p0, int p1, processState* p2, processState* p3, GoUint64 p4,
+               GoUint64 p5, GoUint64 p6, GoUint64 p7, GoUint64 p8, GoUint64 p9, GoUint64 p10,
+               GoUint64 p11));
+  MOCK_METHOD(void, envoyGoFilterOnHttpStreamComplete, (httpRequest * p0));
   MOCK_METHOD(void, envoyGoFilterOnHttpDestroy, (httpRequest * p0, int p1));
   MOCK_METHOD(void, envoyGoRequestSemaDec, (httpRequest * p0));
+  MOCK_METHOD(void, envoyGoFilterCleanUp, ());
 };
 
 class MockNetworkFilterDsoImpl : public NetworkFilterDso {
@@ -40,8 +45,9 @@ public:
   MOCK_METHOD(GoUint64, envoyGoFilterOnDownstreamWrite,
               (void* w, GoUint64 dataSize, GoUint64 dataPtr, GoInt sliceNum, GoInt endOfStream));
 
-  MOCK_METHOD(void, envoyGoFilterOnUpstreamConnectionReady, (void* w));
-  MOCK_METHOD(void, envoyGoFilterOnUpstreamConnectionFailure, (void* w, GoInt reason));
+  MOCK_METHOD(void, envoyGoFilterOnUpstreamConnectionReady, (void* w, GoUint64 connID));
+  MOCK_METHOD(void, envoyGoFilterOnUpstreamConnectionFailure,
+              (void* w, GoInt reason, GoUint64 connID));
   MOCK_METHOD(void, envoyGoFilterOnUpstreamData,
               (void* w, GoUint64 dataSize, GoUint64 dataPtr, GoInt sliceNum, GoInt endOfStream));
   MOCK_METHOD(void, envoyGoFilterOnUpstreamEvent, (void* w, GoInt event));

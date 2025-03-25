@@ -57,16 +57,22 @@ HttpFilterDsoImpl::HttpFilterDsoImpl(const std::string dso_name) : HttpFilterDso
       envoy_go_filter_on_http_header_, handler_, dso_name, "envoyGoFilterOnHttpHeader");
   loaded_ &= dlsymInternal<decltype(envoy_go_filter_on_http_data_)>(
       envoy_go_filter_on_http_data_, handler_, dso_name, "envoyGoFilterOnHttpData");
+  loaded_ &= dlsymInternal<decltype(envoy_go_filter_on_http_log_)>(
+      envoy_go_filter_on_http_log_, handler_, dso_name, "envoyGoFilterOnHttpLog");
+  loaded_ &= dlsymInternal<decltype(envoy_go_filter_on_http_stream_complete_)>(
+      envoy_go_filter_on_http_stream_complete_, handler_, dso_name,
+      "envoyGoFilterOnHttpStreamComplete");
   loaded_ &= dlsymInternal<decltype(envoy_go_filter_on_http_destroy_)>(
       envoy_go_filter_on_http_destroy_, handler_, dso_name, "envoyGoFilterOnHttpDestroy");
   loaded_ &= dlsymInternal<decltype(envoy_go_filter_go_request_sema_dec_)>(
       envoy_go_filter_go_request_sema_dec_, handler_, dso_name, "envoyGoRequestSemaDec");
+  loaded_ &= dlsymInternal<decltype(envoy_go_filter_cleanup_)>(envoy_go_filter_cleanup_, handler_,
+                                                               dso_name, "envoyGoFilterCleanUp");
 }
 
-GoUint64 HttpFilterDsoImpl::envoyGoFilterNewHttpPluginConfig(GoUint64 p0, GoUint64 p1, GoUint64 p2,
-                                                             GoUint64 p3) {
+GoUint64 HttpFilterDsoImpl::envoyGoFilterNewHttpPluginConfig(httpConfig* p0) {
   ASSERT(envoy_go_filter_new_http_plugin_config_ != nullptr);
-  return envoy_go_filter_new_http_plugin_config_(p0, p1, p2, p3);
+  return envoy_go_filter_new_http_plugin_config_(p0);
 }
 
 GoUint64 HttpFilterDsoImpl::envoyGoFilterMergeHttpPluginConfig(GoUint64 p0, GoUint64 p1,
@@ -75,21 +81,34 @@ GoUint64 HttpFilterDsoImpl::envoyGoFilterMergeHttpPluginConfig(GoUint64 p0, GoUi
   return envoy_go_filter_merge_http_plugin_config_(p0, p1, p2, p3);
 }
 
-void HttpFilterDsoImpl::envoyGoFilterDestroyHttpPluginConfig(GoUint64 p0) {
+void HttpFilterDsoImpl::envoyGoFilterDestroyHttpPluginConfig(GoUint64 p0, GoInt p1) {
   ASSERT(envoy_go_filter_destroy_http_plugin_config_ != nullptr);
-  return envoy_go_filter_destroy_http_plugin_config_(p0);
+  return envoy_go_filter_destroy_http_plugin_config_(p0, p1);
 }
 
-GoUint64 HttpFilterDsoImpl::envoyGoFilterOnHttpHeader(httpRequest* p0, GoUint64 p1, GoUint64 p2,
+GoUint64 HttpFilterDsoImpl::envoyGoFilterOnHttpHeader(processState* p0, GoUint64 p1, GoUint64 p2,
                                                       GoUint64 p3) {
   ASSERT(envoy_go_filter_on_http_header_ != nullptr);
   return envoy_go_filter_on_http_header_(p0, p1, p2, p3);
 }
 
-GoUint64 HttpFilterDsoImpl::envoyGoFilterOnHttpData(httpRequest* p0, GoUint64 p1, GoUint64 p2,
+GoUint64 HttpFilterDsoImpl::envoyGoFilterOnHttpData(processState* p0, GoUint64 p1, GoUint64 p2,
                                                     GoUint64 p3) {
   ASSERT(envoy_go_filter_on_http_data_ != nullptr);
   return envoy_go_filter_on_http_data_(p0, p1, p2, p3);
+}
+
+void HttpFilterDsoImpl::envoyGoFilterOnHttpLog(httpRequest* p0, int p1, processState* p2,
+                                               processState* p3, GoUint64 p4, GoUint64 p5,
+                                               GoUint64 p6, GoUint64 p7, GoUint64 p8, GoUint64 p9,
+                                               GoUint64 p10, GoUint64 p11) {
+  ASSERT(envoy_go_filter_on_http_log_ != nullptr);
+  envoy_go_filter_on_http_log_(p0, GoUint64(p1), p2, p3, p4, p5, p6, p7, p8, p9, p10, p11);
+}
+
+void HttpFilterDsoImpl::envoyGoFilterOnHttpStreamComplete(httpRequest* p0) {
+  ASSERT(envoy_go_filter_on_http_stream_complete_ != nullptr);
+  envoy_go_filter_on_http_stream_complete_(p0);
 }
 
 void HttpFilterDsoImpl::envoyGoFilterOnHttpDestroy(httpRequest* p0, int p1) {
@@ -100,6 +119,11 @@ void HttpFilterDsoImpl::envoyGoFilterOnHttpDestroy(httpRequest* p0, int p1) {
 void HttpFilterDsoImpl::envoyGoRequestSemaDec(httpRequest* p0) {
   ASSERT(envoy_go_filter_go_request_sema_dec_ != nullptr);
   envoy_go_filter_go_request_sema_dec_(p0);
+}
+
+void HttpFilterDsoImpl::cleanup() {
+  ASSERT(envoy_go_filter_cleanup_ != nullptr);
+  envoy_go_filter_cleanup_();
 }
 
 ClusterSpecifierDsoImpl::ClusterSpecifierDsoImpl(const std::string dso_name)
@@ -190,14 +214,15 @@ GoUint64 NetworkFilterDsoImpl::envoyGoFilterOnDownstreamWrite(void* w, GoUint64 
   return envoy_go_filter_on_downstream_write_(w, data_size, data_ptr, slice_num, end_of_stream);
 }
 
-void NetworkFilterDsoImpl::envoyGoFilterOnUpstreamConnectionReady(void* w) {
+void NetworkFilterDsoImpl::envoyGoFilterOnUpstreamConnectionReady(void* w, GoUint64 connID) {
   ASSERT(envoy_go_filter_on_upstream_connection_ready_ != nullptr);
-  envoy_go_filter_on_upstream_connection_ready_(w);
+  envoy_go_filter_on_upstream_connection_ready_(w, connID);
 }
 
-void NetworkFilterDsoImpl::envoyGoFilterOnUpstreamConnectionFailure(void* w, GoInt reason) {
+void NetworkFilterDsoImpl::envoyGoFilterOnUpstreamConnectionFailure(void* w, GoInt reason,
+                                                                    GoUint64 connID) {
   ASSERT(envoy_go_filter_on_upstream_connection_failure_ != nullptr);
-  envoy_go_filter_on_upstream_connection_failure_(w, reason);
+  envoy_go_filter_on_upstream_connection_failure_(w, reason, connID);
 }
 
 void NetworkFilterDsoImpl::envoyGoFilterOnUpstreamData(void* w, GoUint64 data_size,

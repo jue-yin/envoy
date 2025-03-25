@@ -116,10 +116,11 @@ CAPIStatus envoyGoFilterDownstreamInfo(void* f, int info_type, void* ret) {
 // Upstream
 //
 
-void* envoyGoFilterUpstreamConnect(void* library_id, void* addr) {
+void* envoyGoFilterUpstreamConnect(void* library_id, void* addr, uint64_t conn_id) {
   std::string id = copyGoString(library_id);
   auto dynamic_lib = Dso::DsoManager<Dso::NetworkFilterDsoImpl>::getDsoByID(id);
-  UpstreamConnPtr conn_ptr = std::make_shared<UpstreamConn>(copyGoString(addr), dynamic_lib);
+  UpstreamConnPtr conn_ptr =
+      std::make_shared<UpstreamConn>(copyGoString(addr), dynamic_lib, conn_id);
   // the upstream connect wrapper will be deleted by envoyGoFilterUpstreamFinalize
   UpstreamConnWrapper* wrapper = new UpstreamConnWrapper(conn_ptr);
   conn_ptr->setWrapper(wrapper);
@@ -127,6 +128,15 @@ void* envoyGoFilterUpstreamConnect(void* library_id, void* addr) {
   conn_ptr->dispatcher()->post([conn_ptr] { conn_ptr->connect(); });
 
   return static_cast<void*>(wrapper);
+}
+
+CAPIStatus envoyGoFilterUpstreamConnEnableHalfClose(void* u, int enable_half_close) {
+  auto* wrapper = reinterpret_cast<UpstreamConnWrapper*>(u);
+  UpstreamConnPtr& conn_ptr = wrapper->conn_ptr_;
+
+  conn_ptr->enableHalfClose(static_cast<bool>(enable_half_close));
+
+  return CAPIOK;
 }
 
 CAPIStatus envoyGoFilterUpstreamWrite(void* u, void* buffer_ptr, int buffer_len, int end_stream) {

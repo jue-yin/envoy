@@ -96,14 +96,11 @@ extern "C" {
 // go:linkname envoyGoFilterNewHttpPluginConfig
 // github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterNewHttpPluginConfig
 extern GoUint64
-envoyGoFilterNewHttpPluginConfig(GoUint64 namePtr,    // NOLINT(readability-identifier-naming)
-                                 GoUint64 nameLen,    // NOLINT(readability-identifier-naming)
-                                 GoUint64 configPtr,  // NOLINT(readability-identifier-naming)
-                                 GoUint64 configLen); // NOLINT(readability-identifier-naming)
+envoyGoFilterNewHttpPluginConfig(httpConfig* p0); // NOLINT(readability-identifier-naming)
 
 // go:linkname envoyGoFilterDestroyHttpPluginConfig
 // github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterDestroyHttpPluginConfig
-extern void envoyGoFilterDestroyHttpPluginConfig(GoUint64 id);
+extern void envoyGoFilterDestroyHttpPluginConfig(GoUint64 id, GoInt need_delay);
 
 // go:linkname envoyGoFilterMergeHttpPluginConfig
 // github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterMergeHttpPluginConfig
@@ -115,18 +112,26 @@ envoyGoFilterMergeHttpPluginConfig(GoUint64 namePtr,  // NOLINT(readability-iden
 
 // go:linkname envoyGoFilterOnHttpHeader
 // github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterOnHttpHeader
-extern GoUint64
-envoyGoFilterOnHttpHeader(httpRequest* r,
-                          GoUint64 endStream,    // NOLINT(readability-identifier-naming)
-                          GoUint64 headerNum,    // NOLINT(readability-identifier-naming)
-                          GoUint64 headerBytes); // NOLINT(readability-identifier-naming)
+extern GoUint64 envoyGoFilterOnHttpHeader(processState* r, GoUint64 end_stream, GoUint64 header_num,
+                                          GoUint64 header_bytes);
 
 // go:linkname envoyGoFilterOnHttpData
 // github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterOnHttpData
-extern GoUint64 envoyGoFilterOnHttpData(httpRequest* r,
-                                        GoUint64 endStream, // NOLINT(readability-identifier-naming)
-                                        GoUint64 buffer,
-                                        GoUint64 length); // NOLINT(readability-identifier-naming)
+extern GoUint64 envoyGoFilterOnHttpData(processState* s, GoUint64 end_stream, GoUint64 buffer,
+                                        GoUint64 length);
+
+// go:linkname envoyGoFilterOnHttpLog
+// github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterOnHttpLog
+extern void envoyGoFilterOnHttpLog(httpRequest* r, GoUint64 type, processState* decoding_state,
+                                   processState* encoding_state, GoUint64 req_header_num,
+                                   GoUint64 req_header_bytes, GoUint64 req_trailer_num,
+                                   GoUint64 req_trailer_bytes, GoUint64 resp_header_num,
+                                   GoUint64 resp_header_bytes, GoUint64 resp_trailer_num,
+                                   GoUint64 resp_trailer_bytes);
+
+// go:linkname envoyGoFilterOnHttpStreamComplete
+// github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterOnHttpStreamComplete
+extern void envoyGoFilterOnHttpStreamComplete(httpRequest* r);
 
 // go:linkname envoyGoFilterOnHttpDestroy
 // github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterOnHttpDestroy
@@ -135,6 +140,10 @@ extern void envoyGoFilterOnHttpDestroy(httpRequest* r, GoUint64 reason);
 // go:linkname envoyGoRequestSemaDec
 // github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoRequestSemaDec
 extern void envoyGoRequestSemaDec(httpRequest* r);
+
+// go:linkname envoyGoFilterCleanUp
+// github.com/envoyproxy/envoy/contrib/golang/filters/http/source/go/pkg/http.envoyGoFilterCleanUp
+extern void envoyGoFilterCleanUp();
 
 // go:linkname envoyGoOnClusterSpecify
 // github.com/envoyproxy/envoy/contrib/golang/router/cluster_specifier/source/go/pkg/cluster_specifier.envoyGoOnClusterSpecify
@@ -191,16 +200,16 @@ extern void envoyGoFilterOnDownstreamEvent(void* f,
 
 // go:linkname envoyGoFilterOnUpstreamConnectionReady
 // github.com/envoyproxy/envoy/contrib/golang/filters/network/source/go/pkg/network.envoyGoFilterOnUpstreamConnectionReady
-extern void envoyGoFilterOnUpstreamConnectionReady(
-    void* f,
-    GoUint64 envoyConnID, // NOLINT(readability-identifier-naming)
-    GoUint64 configID);   // NOLINT(readability-identifier-naming)
+extern void
+envoyGoFilterOnUpstreamConnectionReady(void* f,
+                                       GoUint64 connID); // NOLINT(readability-identifier-naming)
 
 // go:linkname envoyGoFilterOnUpstreamConnectionFailure
 // github.com/envoyproxy/envoy/contrib/golang/filters/network/source/go/pkg/network.envoyGoFilterOnUpstreamConnectionFailure
 extern void
 envoyGoFilterOnUpstreamConnectionFailure(void* f,
-                                         GoInt reason); // NOLINT(readability-identifier-naming)
+                                         GoInt reason,     // NOLINT(readability-identifier-naming)
+                                         GoUint64 connID); // NOLINT(readability-identifier-naming)
 
 // go:linkname envoyGoFilterOnUpstreamData
 // github.com/envoyproxy/envoy/contrib/golang/filters/network/source/go/pkg/network.envoyGoFilterOnUpstreamData
