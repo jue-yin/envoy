@@ -5,3 +5,28 @@ bug_fixes:
   change: |
     Fixed a bug where additional :ref:`cookie attributes <envoy_v3_api_msg_config.route.v3.RouteAction.HashPolicy.cookie>`
     are not sent properly to clients.
+# *Changes expected to improve the state of the world and are unlikely to have negative effects*
+removed_config_or_runtime:
+# *Normally occurs at the end of the* :ref:`deprecation period <deprecated>`
+
+new_features:
+- area: access_log
+  change: |
+    added %RESPONSE_FLAGS_LONG% substitution string, that will output a pascal case string representing the response flags.
+    The output response flags will correspond with %RESPONSE_FLAGS%, only with a long textual string representation.
+- area: extension_discovery_service
+  change: |
+    added ECDS support for :ref:` downstream network filters<envoy_v3_api_field_config.listener.v3.Filter.config_discovery>`.
+- area: access_log
+  change: |
+    Added support for logging upstream connection establishment duration in the
+    :ref:`%COMMON_DURATION% <config_access_log_format_common_duration>` access log
+    formatter operator. The following time points were added: ``%US_CX_BEG%``,
+    ``%US_CX_END%``, ``%US_HS_END%``.
+- area: golang
+  change: |
+    added http golang filter config destroy callback. When a config gets deleted from envoy, the go plugin calls the
+    Destroy function on the config instance. config should implement the new
+    github.com/envoyproxy/envoy/contrib/golang/common/go/api.Config interface, implementing the Destroy function.
+
+deprecated:
