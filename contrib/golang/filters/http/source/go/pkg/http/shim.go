@@ -275,6 +275,7 @@ func envoyGoFilterOnHttpLog(r *C.httpRequest, logType uint64,
 	encodingState := getOrCreateState(encodingStateWrapper)
 	req := getRequest(r)
 	if req == nil {
+		// When creating DownstreamStart access log, the request is not initialized yet
 		req = createRequest(r)
 	}
 
@@ -352,7 +353,10 @@ func envoyGoFilterOnHttpLog(r *C.httpRequest, logType uint64,
 func envoyGoFilterOnHttpStreamComplete(r *C.httpRequest) {
 	req := getRequest(r)
 	defer req.recoverPanic()
-
+	if req == nil {
+		// When the client aborts, the request may be not initialized yet
+		req = createRequest(r)
+	}
 	f := req.httpFilter
 	f.OnStreamComplete()
 }
@@ -362,6 +366,10 @@ func envoyGoFilterOnHttpDestroy(r *C.httpRequest, reason uint64) {
 	req := getRequest(r)
 	// do nothing even when req.panic is true, since filter is already destroying.
 	defer req.recoverPanic()
+	if req == nil {
+		// When the client aborts, the request may be not initialized yet
+		req = createRequest(r)
+	}
 
 	req.resumeWaitCallback()
 

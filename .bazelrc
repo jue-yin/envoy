@@ -532,4 +532,9 @@ try-import %workspace%/clang.bazelrc
 try-import %workspace%/user.bazelrc
 try-import %workspace%/local_tsan.bazelrc
 
+
+# Prevent crashes caused by the new version of tcmalloc using the percpu feature
 build --define tcmalloc=gperftools
+
+# Avoid affecting the signal handling in golang-filter
+build --define signal_trace=disabled
