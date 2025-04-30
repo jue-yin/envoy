@@ -617,7 +617,7 @@ envoy_cmake(
         # linux perf. only for jit and aot
         "WAMR_BUILD_LINUX_PERF": "1",
         # avoid conflicts between os_thread_signal_init and the signal stack in the golang filter.
-        "WASM_DISABLE_HW_BOUND_CHECK": "1",
+        "WAMR_DISABLE_HW_BOUND_CHECK": "1",
     },
     lib_source = "@com_github_wamr//:all",
     out_static_libs = ["libvmlib.a"],
