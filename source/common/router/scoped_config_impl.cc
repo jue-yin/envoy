@@ -43,7 +43,7 @@ LocalPortValueExtractorImpl::LocalPortValueExtractorImpl(
 std::unique_ptr<ScopeKeyFragmentBase> LocalPortValueExtractorImpl::computeFragment(
     const Http::HeaderMap&, const StreamInfo::StreamInfo* info, ReComputeCbPtr&) const {
   ASSERT(info != nullptr, "streamInfo is nullptr.");
-  auto port = info->downstreamAddressProvider().localAddress()->ip()->port();
+  auto port = info->downstreamAddressProvider().directLocalAddress()->ip()->port();
   return std::make_unique<StringKeyFragment>(std::to_string(long(port)));
 }
 

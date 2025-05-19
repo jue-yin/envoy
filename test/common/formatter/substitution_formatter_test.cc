@@ -881,6 +881,18 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
   }
 
   {
+    StreamInfoFormatter format("DOWNSTREAM_DIRECT_LOCAL_ADDRESS");
+    auto address = Network::Address::InstanceConstSharedPtr{new Network::Address::Ipv4Instance(
+             "127.1.2.3", 6745)},
+         original_address = stream_info.downstream_connection_info_provider_->localAddress();
+    stream_info.downstream_connection_info_provider_->setLocalAddress(address);
+    EXPECT_EQ("127.0.0.2:0", format.formatWithContext({}, stream_info));
+    EXPECT_THAT(format.formatValueWithContext({}, stream_info),
+                ProtoEq(ValueUtil::stringValue("127.0.0.2:0")));
+    stream_info.downstream_connection_info_provider_->setLocalAddress(original_address);
+  }
+
+  {
     StreamInfoFormatter upstream_format("DOWNSTREAM_LOCAL_ADDRESS_WITHOUT_PORT");
     EXPECT_EQ("127.0.0.2",
               upstream_format.format(request_headers, response_headers, response_trailers,
@@ -891,8 +903,33 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
   }
 
   {
-    StreamInfoFormatter upstream_format("DOWNSTREAM_LOCAL_PORT");
+    StreamInfoFormatter format("DOWNSTREAM_DIRECT_LOCAL_ADDRESS_WITHOUT_PORT");
+    EXPECT_EQ("127.0.0.2", format.formatWithContext({}, stream_info));
+    EXPECT_THAT(format.formatValueWithContext({}, stream_info),
+                ProtoEq(ValueUtil::stringValue("127.0.0.2")));
+  }
 
+  {
+    StreamInfoFormatter format("DOWNSTREAM_DIRECT_LOCAL_ADDRESS_WITHOUT_PORT");
+    auto address = Network::Address::InstanceConstSharedPtr{
+        new Network::Address::Ipv4Instance("127.1.2.3", 8900)};
+    stream_info.downstream_connection_info_provider_->setLocalAddress(address);
+    EXPECT_EQ("127.0.0.2", format.formatWithContext({}, stream_info));
+    EXPECT_THAT(format.formatValueWithContext({}, stream_info),
+                ProtoEq(ValueUtil::stringValue("127.0.0.2")));
+  }
+
+  {
+    StreamInfoFormatter format("DOWNSTREAM_DIRECT_LOCAL_PORT");
+    EXPECT_EQ("0", format.formatWithContext({}, stream_info));
+    EXPECT_THAT(format.formatValueWithContext({}, stream_info), ProtoEq(ValueUtil::numberValue(0)));
+  }
+
+  {
+    StreamInfoFormatter downstream_local_port_format("DOWNSTREAM_LOCAL_PORT"),
+        downstream_direct_downstream_local_port_format("DOWNSTREAM_DIRECT_LOCAL_PORT");
+
+    StreamInfoFormatter upstream_format("DOWNSTREAM_LOCAL_PORT");
     // Validate for IPv4 address
     auto address = Network::Address::InstanceConstSharedPtr{
         new Network::Address::Ipv4Instance("127.1.2.3", 8443)};
@@ -942,6 +979,11 @@ TEST(SubstitutionFormatterTest, streamInfoFormatter) {
     EXPECT_THAT(upstream_format.formatValue(request_headers, response_headers, response_trailers,
                                             stream_info, body, AccessLog::AccessLogType::NotSet),
                 ProtoEq(ValueUtil::nullValue()));
+    EXPECT_EQ("0",
+              downstream_direct_downstream_local_port_format.formatWithContext({}, stream_info));
+    EXPECT_THAT(
+        downstream_direct_downstream_local_port_format.formatValueWithContext({}, stream_info),
+        ProtoEq(ValueUtil::numberValue(0)));
   }
 
   {

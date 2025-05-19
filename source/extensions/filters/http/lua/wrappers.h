@@ -207,6 +207,7 @@ public:
   static ExportedFunctions exportedFunctions() {
     return {{"protocol", static_luaProtocol},
             {"dynamicMetadata", static_luaDynamicMetadata},
+            {"downstreamDirectLocalAddress", static_luaDownstreamDirectLocalAddress},
             {"downstreamLocalAddress", static_luaDownstreamLocalAddress},
             {"downstreamDirectRemoteAddress", static_luaDownstreamDirectRemoteAddress},
             {"downstreamSslConnection", static_luaDownstreamSslConnection},
@@ -239,7 +240,14 @@ private:
   DECLARE_LUA_FUNCTION(StreamInfoWrapper, luaDownstreamLocalAddress);
 
   /**
-   * Get current downstream local address
+   * Get current direct downstream local address
+   * @return string representation of downstream directly connected local address.
+   * This is equivalent to the local address of the physical connection.
+   */
+  DECLARE_LUA_FUNCTION(StreamInfoWrapper, luaDownstreamDirectLocalAddress);
+
+  /**
+   * Get current direct downstream remote address
    * @return string representation of downstream directly connected address.
    * This is equivalent to the address of the physical connection.
    */

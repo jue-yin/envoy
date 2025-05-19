@@ -80,8 +80,16 @@ bool requestWasConnect(const RequestHeaderMapSharedPtr& headers, Protocol protoc
 ConnectionManagerStats ConnectionManagerImpl::generateStats(const std::string& prefix,
                                                             Stats::Scope& scope) {
   return ConnectionManagerStats(
+#if defined(ALIMESH)
+      {ALL_HTTP_CONN_MAN_STATS(POOL_COUNTER_PREFIX(scope, prefix), POOL_GAUGE_PREFIX(scope, prefix),
+                               POOL_HISTOGRAM_PREFIX(scope, prefix))
+           HIGRESS_EXT_HTTP_CONN_MAN_STATS(POOL_COUNTER_PREFIX(scope, prefix),
+                                           POOL_GAUGE_PREFIX(scope, prefix),
+                                           POOL_HISTOGRAM_PREFIX(scope, prefix))},
+#else
       {ALL_HTTP_CONN_MAN_STATS(POOL_COUNTER_PREFIX(scope, prefix), POOL_GAUGE_PREFIX(scope, prefix),
                                POOL_HISTOGRAM_PREFIX(scope, prefix))},
+#endif
       prefix, scope);
 }
 
@@ -1673,9 +1681,15 @@ void ConnectionManagerImpl::ActiveStream::refreshCachedRoute(const Router::Route
       }
       route = snapped_route_config_->route(cb, *request_headers_, filter_manager_.streamInfo(),
                                            stream_id_);
+      bool retry_found = route != nullptr;
       ENVOY_STREAM_LOG(debug,
                        "after the route was not found, search again in other scopes and found:{}",
-                       *this, route != nullptr);
+                       *this, retry_found);
+      if (retry_found) {
+        connection_manager_.stats_.named_.downstream_rq_retry_scope_found_total_.inc();
+      } else {
+        connection_manager_.stats_.named_.downstream_rq_retry_scope_not_found_total_.inc();
+      }
     }
   }
 #endif

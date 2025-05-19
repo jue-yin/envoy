@@ -19,9 +19,18 @@ HttpConnectionManagerImplMixin::HttpConnectionManagerImplMixin()
           Filesystem::FilePathAndType{Filesystem::DestinationType::File, access_log_path_}, {},
           Formatter::SubstitutionFormatUtils::defaultSubstitutionFormatter(), log_manager_)}},
       codec_(new NiceMock<MockServerConnection>()),
+#if defined(ALIMESH)
+      stats_({ALL_HTTP_CONN_MAN_STATS(POOL_COUNTER(*fake_stats_.rootScope()),
+                                      POOL_GAUGE(*fake_stats_.rootScope()),
+                                      POOL_HISTOGRAM(*fake_stats_.rootScope()))
+                  HIGRESS_EXT_HTTP_CONN_MAN_STATS(POOL_COUNTER(*fake_stats_.rootScope()),
+                                                  POOL_GAUGE(*fake_stats_.rootScope()),
+                                                  POOL_HISTOGRAM(*fake_stats_.rootScope()))},
+#else
       stats_({ALL_HTTP_CONN_MAN_STATS(POOL_COUNTER(*fake_stats_.rootScope()),
                                       POOL_GAUGE(*fake_stats_.rootScope()),
                                       POOL_HISTOGRAM(*fake_stats_.rootScope()))},
+#endif
              "", *fake_stats_.rootScope()),
 
       listener_stats_({CONN_MAN_LISTENER_STATS(POOL_COUNTER(fake_listener_stats_))}),
