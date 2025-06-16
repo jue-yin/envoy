@@ -91,6 +91,7 @@ envoy_cc_extension(
         "//source/common/network/dns_resolver:dns_factory_util_lib",
         "//source/common/tracing:http_tracer_lib",
         "//source/extensions/common/wasm/ext:declare_property_cc_proto",
+        "//source/extensions/common/wasm/ext:inject_encoded_data_cc_proto",
         "//source/extensions/common/wasm/ext:envoy_null_vm_wasm_api",
         "//source/extensions/filters/common/expr:context_lib",
         "@com_google_cel_cpp//eval/public:builtin_func_registrar",

@@ -89,3 +89,21 @@ cc_proto_library(
         # "//external:protobuf_clib",
     ],
 )
+
+# NB: this target is compiled both to native code and to Wasm. Hence the generic rule.
+proto_library(
+    name = "inject_encoded_data_proto",
+    srcs = ["inject_encoded_data.proto"],
+    deps = [
+        "@com_google_protobuf//:struct_proto",
+    ],
+)
+
+# NB: this target is compiled both to native code and to Wasm. Hence the generic rule.
+cc_proto_library(
+    name = "inject_encoded_data_cc_proto",
+    deps = [
+        ":inject_encoded_data_proto",
+        # "//external:protobuf_clib",
+    ],
+)

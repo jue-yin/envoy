@@ -1940,6 +1940,19 @@ WasmResult Context::injectEncodedDataToFilterChain(std::string_view body_text, b
   }
   return WasmResult::Ok;
 }
+
+WasmResult Context::injectEncodedDataToFilterChainOnHeader(std::string_view body_text,
+                                                           bool end_stream) {
+  if (encoder_callbacks_) {
+    std::string body_text_copy(body_text);
+    encoder_callbacks_->dispatcher().post([=]() {
+      auto buffer = ::Envoy::Buffer::OwnedImpl(body_text_copy);
+      encoder_callbacks_->injectEncodedDataToFilterChain(buffer, end_stream);
+    });
+  }
+  return WasmResult::Ok;
+}
+
 std::string convertHealthStatusToString(Upstream::Host::Health status) {
   if (status == Upstream::Host::Health::Unhealthy) {
     return "Unhealthy";
@@ -1949,13 +1962,16 @@ std::string convertHealthStatusToString(Upstream::Host::Health status) {
     return "Healthy";
   }
 }
-WasmResult Context::getUpstreamHosts(StringPairs * result) {
+WasmResult Context::getUpstreamHosts(StringPairs* result) {
   if (decoder_callbacks_) {
     auto upstream_cluster = decoder_callbacks_->clusterInfo();
     if (!upstream_cluster) {
       return WasmResult::Ok;
     }
-    for (auto& p : this->clusterManager().getThreadLocalCluster(upstream_cluster->name())->prioritySet().hostSetsPerPriority()) {
+    for (auto& p : this->clusterManager()
+                       .getThreadLocalCluster(upstream_cluster->name())
+                       ->prioritySet()
+                       .hostSetsPerPriority()) {
       for (auto& h : p->hosts()) {
         std::map<std::string, std::string> info_map;
         if (!h->getEndpointMetrics().empty()) {
@@ -1967,7 +1983,8 @@ WasmResult Context::getUpstreamHosts(StringPairs * result) {
           result->push_back(std::make_pair(h->address()->asString(), j.dump(0)));
         } catch (const std::exception& e) {
           ENVOY_LOG(error, "getUpstreamHosts json dump failed: {}", e.what());
-          result->push_back(std::make_pair(h->address()->asString(), "{\"error\": \"Failed to get host info\"}"));
+          result->push_back(
+              std::make_pair(h->address()->asString(), "{\"error\": \"Failed to get host info\"}"));
         }
       }
     }

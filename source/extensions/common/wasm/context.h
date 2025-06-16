@@ -220,6 +220,7 @@ public:
                                std::string_view details) override;
 #if defined(HIGRESS)
   WasmResult injectEncodedDataToFilterChain(std::string_view body_text, bool end_stream) override;
+  WasmResult injectEncodedDataToFilterChainOnHeader(std::string_view body_text, bool end_stream);
   WasmResult getUpstreamHosts(StringPairs * result) override;
   WasmResult setUpstreamOverrideHost(std::string_view address) override;
 #endif

@@ -1,5 +1,6 @@
 #include "source/common/common/logger.h"
 #include "source/extensions/common/wasm/ext/declare_property.pb.h"
+#include "source/extensions/common/wasm/ext/inject_encoded_data.pb.h"
 #include "source/extensions/common/wasm/wasm.h"
 
 #if defined(WASM_USE_CEL_PARSER)
@@ -270,6 +271,46 @@ public:
 RegisterForeignFunction
     registerDeclarePropertyForeignFunction("declare_property",
                                            createFromClass<DeclarePropertyFactory>());
+
+#if defined(HIGRESS)
+class InjectEncodedDataToFilterChainFactory: public Logger::Loggable<Logger::Id::wasm> {
+public:
+  WasmForeignFunction create(std::shared_ptr<InjectEncodedDataToFilterChainFactory> self) const {
+    WasmForeignFunction f = [self](WasmBase&, std::string_view arguments,
+                                    const std::function<void*(size_t size)>&) -> WasmResult {
+      envoy::source::extensions::common::wasm::InjectEncodedDataToFilterChainArguments args;
+      if (args.ParseFromArray(arguments.data(), arguments.size())) {
+        auto context = static_cast<Context*>(proxy_wasm::current_context_);
+        return context->injectEncodedDataToFilterChain(args.body(), args.endstream());
+      }
+      return WasmResult::BadArgument;
+    };
+    return f;
+  }
+};
+RegisterForeignFunction
+    registerInjectEncodedDataToFilterChainFactory("inject_encoded_data_to_filter_chain",
+                                            createFromClass<InjectEncodedDataToFilterChainFactory>());
+
+class InjectEncodedDataToFilterChainOnHeaderFactory: public Logger::Loggable<Logger::Id::wasm> {
+  public:
+    WasmForeignFunction create(std::shared_ptr<InjectEncodedDataToFilterChainOnHeaderFactory> self) const {
+      WasmForeignFunction f = [self](WasmBase&, std::string_view arguments,
+                                      const std::function<void*(size_t size)>&) -> WasmResult {
+        envoy::source::extensions::common::wasm::InjectEncodedDataToFilterChainArguments args;
+        if (args.ParseFromArray(arguments.data(), arguments.size())) {
+          auto context = static_cast<Context*>(proxy_wasm::current_context_);
+          return context->injectEncodedDataToFilterChainOnHeader(args.body(), args.endstream());
+        }
+        return WasmResult::BadArgument;
+      };
+      return f;
+    }
+  };
+  RegisterForeignFunction
+      registerInjectEncodedDataToFilterChainOnHeaderFactory("inject_encoded_data_to_filter_chain_on_header",
+                                              createFromClass<InjectEncodedDataToFilterChainOnHeaderFactory>());
+#endif
 
 } // namespace Wasm
 } // namespace Common
