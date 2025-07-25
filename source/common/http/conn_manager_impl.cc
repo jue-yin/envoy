@@ -1685,11 +1685,6 @@ void ConnectionManagerImpl::ActiveStream::refreshCachedRoute(const Router::Route
       ENVOY_STREAM_LOG(debug,
                        "after the route was not found, search again in other scopes and found:{}",
                        *this, retry_found);
-      if (retry_found) {
-        connection_manager_.stats_.named_.downstream_rq_retry_scope_found_total_.inc();
-      } else {
-        connection_manager_.stats_.named_.downstream_rq_retry_scope_not_found_total_.inc();
-      }
     }
   }
 #endif
