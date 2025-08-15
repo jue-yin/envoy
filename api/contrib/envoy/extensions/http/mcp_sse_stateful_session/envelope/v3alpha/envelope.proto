@@ -51,4 +51,16 @@ message EnvelopeSessionState {
   //
   // Note: Uses Base64Url encoding for the host address and '.' as separator.
   string param_name = 1 [(validate.rules).string = {min_len: 1}];
+  // patterns to match the end of the SSE data stream.
+  // according to the HTML standard, the end of a server-sent-events' chunk can be
+  // - CRLFCRLF (two CRLFs)
+  // - CRCR (two CRs)
+  // - LFLF (two LFs)
+  // https://html.spec.whatwg.org/multipage/server-sent-events.html#parsing-an-event-stream
+  // other customized patterns can be added
+  repeated string chunk_ending_patterns = 2 [
+    (validate.rules).repeated = {min_items: 1},
+    (validate.rules).string = {min_len: 1},
+    default = "\r\r,\n\n,\r\n\r\n"
+  ];
 }
