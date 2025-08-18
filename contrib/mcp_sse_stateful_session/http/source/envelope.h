@@ -43,7 +43,10 @@ public:
   private:
     bool isSSEResponse() const {
       return response_headers_ && response_headers_->ContentType() &&
-             response_headers_->ContentType()->value().getStringView() == "text/event-stream";
+             absl::StrContains(
+                 absl::AsciiStrToLower(response_headers_->ContentType()->value().getStringView()),
+                 absl::AsciiStrToLower(
+                     Envoy::Http::Headers::get().ContentTypeValues.TextEventStream));
     }
     absl::optional<std::string> upstream_address_;
     const EnvelopeSessionStateFactory& factory_;
@@ -62,7 +65,8 @@ public:
 private:
   absl::optional<std::string> parseAddress(Envoy::Http::RequestHeaderMap& headers) const;
   const std::string param_name_;
-  const std::vector<std::string> chunk_ending_patterns_;
+  const std::vector<std::string> chunk_end_patterns_;
+  const size_t max_pending_chunk_size_{4096};
   static constexpr char SEPARATOR = '.'; // separate session ID and host address
 };
 
