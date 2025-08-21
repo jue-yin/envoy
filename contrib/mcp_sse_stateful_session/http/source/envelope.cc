@@ -133,14 +133,12 @@ EnvelopeSessionStateFactory::parseAddress(Envoy::Http::RequestHeaderMap& headers
   }
 
   // Parse query parameters
-  const auto params =
-      Envoy::Http::Utility::QueryParamsMulti::parseQueryString(path->value().getStringView())
-          .data();
+  const auto params = Envoy::Http::Utility::parseQueryString(path->value().getStringView());
   auto it = params.find(param_name_);
   if (it == params.end() || it->second.empty()) {
     return absl::nullopt;
   }
-  const std::string& session_value = it->second[0];
+  const std::string& session_value = it->second;
   ENVOY_LOG(debug, "Processing session value: {}", session_value);
 
   auto separator_pos = session_value.rfind(SEPARATOR);
@@ -164,10 +162,7 @@ EnvelopeSessionStateFactory::parseAddress(Envoy::Http::RequestHeaderMap& headers
   size_t estimated_size = param_name_.length() + 1 + original_session_id.length();
   for (const auto& param : params) {
     if (param.first != param_name_) {
-      estimated_size += param.first.length() + 1; // "&" + param_name
-      for (const auto& value : param.second) {
-        estimated_size += value.length() + 1; // "=" + value
-      }
+      estimated_size += param.first.length() + 1 + param.second.length() + 1; // "&" + param_name + "=" + value
     }
   }
   new_query.reserve(estimated_size);
@@ -180,9 +175,7 @@ EnvelopeSessionStateFactory::parseAddress(Envoy::Http::RequestHeaderMap& headers
     if (param.first == param_name_) {
       continue; // Skip the session ID as we already added it
     }
-    for (const auto& value : param.second) {
-      absl::StrAppend(&new_query, "&", param.first, "=", value);
-    }
+    absl::StrAppend(&new_query, "&", param.first, "=", param.second);
   }
 
   // Build final path

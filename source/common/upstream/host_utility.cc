@@ -169,7 +169,7 @@ HostConstSharedPtr HostUtility::selectOverrideHost(const HostMap* host_map, Host
     return nullptr;
   }
 
-  auto host_iter = host_map->find(override_host.value());
+  auto host_iter = host_map->find(override_host.value().first);
 
   // The override host cannot be found in the host map.
   if (host_iter == host_map->end()) {

@@ -761,13 +761,13 @@ public:
    * host list of the routed cluster, the host should be selected first.
    * @param host The override host address.
    */
-  virtual void setUpstreamOverrideHost(absl::string_view host) PURE;
+  virtual void setUpstreamOverrideHost(Upstream::LoadBalancerContext::OverrideHost host) PURE;
 
   /**
    * @return absl::optional<absl::string_view> optional override host for the upstream
    * load balancing.
    */
-  virtual absl::optional<absl::string_view> upstreamOverrideHost() const PURE;
+  virtual absl::optional<Upstream::LoadBalancerContext::OverrideHost> upstreamOverrideHost() const PURE;
 
 #if defined(HIGRESS)
   virtual bool needBuffering() const { return false; }

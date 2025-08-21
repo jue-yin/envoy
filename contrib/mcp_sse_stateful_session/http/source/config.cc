@@ -13,7 +13,7 @@ namespace Envelope {
 
 Envoy::Http::McpSseSessionStateFactorySharedPtr
 EnvelopeSessionStateFactoryConfig::createSessionStateFactory(
-    const Protobuf::Message& config, Server::Configuration::GenericFactoryContext& context) {
+    const Protobuf::Message& config, Server::Configuration::CommonFactoryContext& context) {
   const auto& proto_config =
       MessageUtil::downcastAndValidate<const envoy::extensions::http::mcp_sse_stateful_session::
                                            envelope::v3alpha::EnvelopeSessionState&>(

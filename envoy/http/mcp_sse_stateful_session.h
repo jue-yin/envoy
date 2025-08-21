@@ -86,7 +86,7 @@ public:
    */
   virtual McpSseSessionStateFactorySharedPtr
   createSessionStateFactory(const Protobuf::Message& config,
-                            Server::Configuration::GenericFactoryContext& context) PURE;
+                            Server::Configuration::CommonFactoryContext& context) PURE;
 
   std::string category() const override { return "envoy.http.mcp_sse_stateful_session"; }
 };

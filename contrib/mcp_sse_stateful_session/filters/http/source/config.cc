@@ -4,8 +4,6 @@
 
 #include "envoy/registry/registry.h"
 
-#include "source/server/generic_factory_context.h"
-
 namespace Envoy {
 namespace Extensions {
 namespace HttpFilters {
@@ -22,13 +20,11 @@ Envoy::Http::FilterFactoryCb McpSseStatefulSessionFactoryConfig::createFilterFac
   };
 }
 
-absl::StatusOr<Router::RouteSpecificFilterConfigConstSharedPtr>
+Router::RouteSpecificFilterConfigConstSharedPtr
 McpSseStatefulSessionFactoryConfig::createRouteSpecificFilterConfigTyped(
     const PerRouteProtoConfig& proto_config, Server::Configuration::ServerFactoryContext& context,
-    ProtobufMessage::ValidationVisitor& visitor) {
-  Server::GenericFactoryContextImpl generic_context(context, visitor);
-
-  return std::make_shared<PerRouteMcpSseStatefulSession>(proto_config, generic_context);
+    ProtobufMessage::ValidationVisitor&) {
+  return std::make_shared<PerRouteMcpSseStatefulSession>(proto_config, context);
 }
 
 REGISTER_FACTORY(McpSseStatefulSessionFactoryConfig,

@@ -246,8 +246,8 @@ struct ActiveStreamDecoderFilter : public ActiveStreamFilterBase,
 
   Network::Socket::OptionsSharedPtr getUpstreamSocketOptions() const override;
   Buffer::BufferMemoryAccountSharedPtr account() const override;
-  void setUpstreamOverrideHost(absl::string_view host) override;
-  absl::optional<absl::string_view> upstreamOverrideHost() const override;
+  void setUpstreamOverrideHost(Upstream::LoadBalancerContext::OverrideHost host) override;
+  absl::optional<Upstream::LoadBalancerContext::OverrideHost> upstreamOverrideHost() const override;
 #if defined(HIGRESS)
   bool needBuffering() const override { return need_buffering_; }
   void setNeedBuffering(bool need) override { need_buffering_ = need; }

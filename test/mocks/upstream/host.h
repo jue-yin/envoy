@@ -225,6 +225,11 @@ public:
   MOCK_METHOD(bool, warmed, (), (const));
   MOCK_METHOD(absl::optional<MonotonicTime>, lastHcPassTime, (), (const));
 
+#if defined(HIGRESS)
+  MOCK_METHOD(std::string, getEndpointMetrics, (), (const));
+  MOCK_METHOD(void, setEndpointMetrics, (absl::string_view endpoint_metrics));
+#endif
+
   testing::NiceMock<MockClusterInfo> cluster_;
   Network::UpstreamTransportSocketFactoryPtr socket_factory_;
   testing::NiceMock<Outlier::MockDetectorHostMonitor> outlier_detector_;

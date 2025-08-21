@@ -16,7 +16,7 @@ class EnvelopeSessionStateFactoryConfig : public Envoy::Http::McpSseSessionState
 public:
   Envoy::Http::McpSseSessionStateFactorySharedPtr
   createSessionStateFactory(const Protobuf::Message& config,
-                            Server::Configuration::GenericFactoryContext& context) override;
+                            Server::Configuration::CommonFactoryContext& context) override;
 
   ProtobufTypes::MessagePtr createEmptyConfigProto() override {
     return std::make_unique<envoy::extensions::http::mcp_sse_stateful_session::envelope::v3alpha::

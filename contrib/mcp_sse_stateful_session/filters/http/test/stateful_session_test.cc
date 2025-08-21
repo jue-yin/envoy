@@ -34,9 +34,7 @@ public:
     ASSERT(!config.empty());
     ProtoConfig proto_config;
     TestUtility::loadFromYaml(std::string(config), proto_config);
-    Envoy::Server::GenericFactoryContextImpl generic_context(context_);
-
-    config_ = std::make_shared<McpSseStatefulSessionConfig>(proto_config, generic_context);
+    config_ = std::make_shared<McpSseStatefulSessionConfig>(proto_config, context_);
 
     filter_ = std::make_shared<McpSseStatefulSession>(config_);
     filter_->setDecoderFilterCallbacks(decoder_callbacks_);
@@ -53,7 +51,7 @@ public:
       }
 
       route_config_ =
-          std::make_shared<PerRouteMcpSseStatefulSession>(proto_route_config, generic_context);
+          std::make_shared<PerRouteMcpSseStatefulSession>(proto_route_config, context_);
 
       ON_CALL(*decoder_callbacks_.route_, mostSpecificPerFilterConfig(_))
           .WillByDefault(Return(route_config_.get()));
@@ -254,9 +252,9 @@ TEST_F(StatefulSessionTest, NullSessionState) {
 
 TEST(EmpytProtoConfigTest, EmpytProtoConfigTest) {
   ProtoConfig empty_proto_config;
-  testing::NiceMock<Server::Configuration::MockGenericFactoryContext> generic_context;
+  testing::NiceMock<Server::Configuration::MockFactoryContext> context;
 
-  McpSseStatefulSessionConfig config(empty_proto_config, generic_context);
+  McpSseStatefulSessionConfig config(empty_proto_config, context);
 
   Envoy::Http::TestRequestHeaderMapImpl request_headers{
       {":path", "/"}, {":method", "GET"}, {":authority", "test.com"}};

@@ -12,7 +12,6 @@
 #include "source/common/buffer/buffer_impl.h"
 #include "source/common/common/logger.h"
 #include "source/extensions/filters/http/common/pass_through_filter.h"
-#include "source/server/generic_factory_context.h"
 
 #include "absl/strings/string_view.h"
 #include "contrib/envoy/extensions/filters/http/mcp_sse_stateful_session/v3alpha/mcp_sse_stateful_session.pb.h"
@@ -31,7 +30,7 @@ using PerRouteProtoConfig = envoy::extensions::filters::http::mcp_sse_stateful_s
 class McpSseStatefulSessionConfig {
 public:
   McpSseStatefulSessionConfig(const ProtoConfig& config,
-                              Server::Configuration::GenericFactoryContext& context);
+                              Server::Configuration::CommonFactoryContext& context);
 
   Envoy::Http::McpSseSessionStatePtr
   createSessionState(Envoy::Http::RequestHeaderMap& headers) const {
@@ -50,7 +49,7 @@ using McpSseStatefulSessionConfigSharedPtr = std::shared_ptr<McpSseStatefulSessi
 class PerRouteMcpSseStatefulSession : public Router::RouteSpecificFilterConfig {
 public:
   PerRouteMcpSseStatefulSession(const PerRouteProtoConfig& config,
-                                Server::Configuration::GenericFactoryContext& context);
+                                Server::Configuration::CommonFactoryContext& context);
 
   bool disabled() const { return disabled_; }
   McpSseStatefulSessionConfig* statefulSessionConfig() const { return config_.get(); }

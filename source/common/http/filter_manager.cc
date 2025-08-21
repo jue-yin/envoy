@@ -1756,12 +1756,15 @@ Buffer::BufferMemoryAccountSharedPtr ActiveStreamDecoderFilter::account() const 
   return parent_.account();
 }
 
-void ActiveStreamDecoderFilter::setUpstreamOverrideHost(absl::string_view host) {
-  parent_.upstream_override_host_.emplace(std::move(host));
+void ActiveStreamDecoderFilter::setUpstreamOverrideHost(Upstream::LoadBalancerContext::OverrideHost host) {
+  parent_.upstream_override_host_.emplace(std::move(host.first));
 }
 
-absl::optional<absl::string_view> ActiveStreamDecoderFilter::upstreamOverrideHost() const {
-  return parent_.upstream_override_host_;
+absl::optional<Upstream::LoadBalancerContext::OverrideHost> ActiveStreamDecoderFilter::upstreamOverrideHost() const {
+  if (parent_.upstream_override_host_.has_value()) {
+    return std::make_pair(parent_.upstream_override_host_.value(), false);
+  }
+  return absl::nullopt;
 }
 
 } // namespace Http

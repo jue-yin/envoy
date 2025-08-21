@@ -37,7 +37,7 @@ public:
   }
 
   MOCK_METHOD(Envoy::Http::McpSseSessionStateFactorySharedPtr, createSessionStateFactory,
-              (const Protobuf::Message&, Server::Configuration::GenericFactoryContext&));
+              (const Protobuf::Message&, Server::Configuration::CommonFactoryContext&));
 
   std::string name() const override { return "envoy.http.mcp_sse_stateful_session.mock"; }
 };

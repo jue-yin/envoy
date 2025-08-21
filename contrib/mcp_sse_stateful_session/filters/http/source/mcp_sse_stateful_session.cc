@@ -5,7 +5,6 @@
 
 #include "source/common/config/utility.h"
 #include "source/common/http/utility.h"
-#include "source/common/upstream/load_balancer_context_base.h"
 
 namespace Envoy {
 namespace Extensions {
@@ -24,7 +23,7 @@ public:
 } // namespace
 
 McpSseStatefulSessionConfig::McpSseStatefulSessionConfig(
-    const ProtoConfig& config, Server::Configuration::GenericFactoryContext& context)
+    const ProtoConfig& config, Server::Configuration::CommonFactoryContext& context)
     : strict_(config.strict()) {
   if (!config.has_session_state()) {
     factory_ = std::make_shared<EmptySessionStateFactory>();
@@ -41,7 +40,7 @@ McpSseStatefulSessionConfig::McpSseStatefulSessionConfig(
 }
 
 PerRouteMcpSseStatefulSession::PerRouteMcpSseStatefulSession(
-    const PerRouteProtoConfig& config, Server::Configuration::GenericFactoryContext& context) {
+    const PerRouteProtoConfig& config, Server::Configuration::CommonFactoryContext& context) {
   if (config.override_case() == PerRouteProtoConfig::kDisabled) {
     disabled_ = true;
     return;
