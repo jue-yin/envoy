@@ -276,12 +276,16 @@ envoy_cc_library(
 )
 
 envoy_cc_library(
-    name = "mcp_sse_stateful_session_interface",
-    hdrs = ["mcp_sse_stateful_session.h"],
+    name = "mcp_handler_interface",
+    hdrs = [
+        "mcp_handler.h",
+    ],
     deps = [
-        "//envoy/config:typed_config_interface",
+        "//envoy/http:header_map_interface",
+        "//source/common/protobuf",
+        "//source/common/protobuf:utility_lib",
+        "//envoy/buffer:buffer_interface",
         "//envoy/server:factory_context_interface",
-        "//envoy/upstream:upstream_interface",
-        "//source/common/buffer:buffer_lib",
+        "@com_google_googleapis//google/api:http_cc_proto",
     ],
 )
