@@ -4,11 +4,11 @@ load(
     "envoy_cc_library",
     "envoy_extension_package",
 )
- 
+
 licenses(["notice"])  # Apache 2
- 
+
 envoy_extension_package()
- 
+
 envoy_cc_library(
     name = "envelope_lib",
     srcs = ["envelope.cc"],
@@ -21,7 +21,7 @@ envoy_cc_library(
         "@envoy_api//envoy/extensions/http/stateful_session/envelope/v3:pkg_cc_proto",
     ],
 )
- 
+
 envoy_cc_extension(
     name = "config",
     srcs = ["config.cc"],

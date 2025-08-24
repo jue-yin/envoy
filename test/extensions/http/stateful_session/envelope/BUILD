@@ -6,11 +6,11 @@ load(
     "//test/extensions:extensions_build_system.bzl",
     "envoy_extension_cc_test",
 )
- 
+
 licenses(["notice"])  # Apache 2
- 
+
 envoy_package()
- 
+
 envoy_extension_cc_test(
     name = "envelope_test",
     srcs = ["envelope_test.cc"],
@@ -22,7 +22,7 @@ envoy_extension_cc_test(
         "//test/test_common:utility_lib",
     ],
 )
- 
+
 envoy_extension_cc_test(
     name = "config_test",
     srcs = ["config_test.cc"],

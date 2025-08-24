@@ -33,7 +33,7 @@ public:
    * Base64 encode an input char buffer with a given length.
    * @param input string to encode.
    */
-   static std::string encode(absl::string_view input);
+  static std::string encode(absl::string_view input);
 
   /**
    * Base64 encode an input char buffer with a given length.

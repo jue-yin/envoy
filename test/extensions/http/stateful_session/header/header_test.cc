@@ -53,7 +53,7 @@ TEST(HeaderBasedSessionStateFactoryTest, SessionStateTest) {
 
     // Session state is not updated so expect no header in response
     EXPECT_EQ(response_headers.get_("session-header"), "");
-    
+
     session_state->onUpdate("2.3.4.5:80", response_headers);
 
     // Update session state because the current request is routed to a new upstream host.

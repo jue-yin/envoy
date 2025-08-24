@@ -23,6 +23,7 @@ public:
         : upstream_address_(std::move(address)), factory_(factory) {}
     absl::optional<absl::string_view> upstreamAddress() const override { return upstream_address_; }
     void onUpdate(absl::string_view host_address, Envoy::Http::ResponseHeaderMap& headers) override;
+
   private:
     absl::optional<std::string> upstream_address_;
     const EnvelopeSessionStateFactory& factory_;
@@ -31,6 +32,7 @@ public:
   Envoy::Http::SessionStatePtr create(Envoy::Http::RequestHeaderMap& headers) const override {
     return std::make_unique<SessionStateImpl>(parseAddress(headers), *this);
   }
+
 private:
   absl::optional<std::string> parseAddress(Envoy::Http::RequestHeaderMap& headers) const;
   const Envoy::Http::LowerCaseString name_;
