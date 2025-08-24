@@ -28,13 +28,16 @@ public:
   StatefulSessionConfig(const ProtoConfig& config,
                         Server::Configuration::CommonFactoryContext& context);
 
-  Http::SessionStatePtr createSessionState(const Http::RequestHeaderMap& headers) const {
+  Http::SessionStatePtr createSessionState(Http::RequestHeaderMap& headers) const {
     ASSERT(factory_ != nullptr);
     return factory_->create(headers);
   }
 
+  bool isStrict() const { return strict_; }
+
 private:
   Http::SessionStateFactorySharedPtr factory_;
+  bool strict_{false};
 };
 using StatefulSessionConfigSharedPtr = std::shared_ptr<StatefulSessionConfig>;
 
@@ -68,7 +71,7 @@ public:
 private:
   Http::SessionStatePtr session_state_;
 
-  StatefulSessionConfigSharedPtr config_{};
+  StatefulSessionConfigSharedPtr config_;
 };
 
 } // namespace StatefulSession

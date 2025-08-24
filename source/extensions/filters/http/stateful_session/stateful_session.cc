@@ -16,7 +16,7 @@ namespace {
 
 class EmptySessionStateFactory : public Envoy::Http::SessionStateFactory {
 public:
-  Envoy::Http::SessionStatePtr create(const Envoy::Http::RequestHeaderMap&) const override {
+  Envoy::Http::SessionStatePtr create(Envoy::Http::RequestHeaderMap&) const override {
     return nullptr;
   }
 };
@@ -24,7 +24,8 @@ public:
 } // namespace
 
 StatefulSessionConfig::StatefulSessionConfig(const ProtoConfig& config,
-                                             Server::Configuration::CommonFactoryContext& context) {
+                                             Server::Configuration::CommonFactoryContext& context)
+    : strict_(config.strict()) {
   if (!config.has_session_state()) {
     factory_ = std::make_shared<EmptySessionStateFactory>();
     return;
@@ -66,7 +67,8 @@ Http::FilterHeadersStatus StatefulSession::decodeHeaders(Http::RequestHeaderMap&
   }
 
   if (auto upstream_address = session_state_->upstreamAddress(); upstream_address.has_value()) {
-    decoder_callbacks_->setUpstreamOverrideHost(upstream_address.value());
+    decoder_callbacks_->setUpstreamOverrideHost(
+        std::make_pair(upstream_address.value(), config->isStrict()));
   }
   return Http::FilterHeadersStatus::Continue;
 }
@@ -80,7 +82,7 @@ Http::FilterHeadersStatus StatefulSession::encodeHeaders(Http::ResponseHeaderMap
       upstream_info != nullptr) {
     auto host = upstream_info->upstreamHost();
     if (host != nullptr) {
-      session_state_->onUpdate(*host, headers);
+      session_state_->onUpdate(host->address()->asStringView(), headers);
     }
   }
 

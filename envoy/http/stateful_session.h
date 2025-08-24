@@ -34,7 +34,7 @@ public:
    * @param host the upstream host that was finally selected.
    * @param headers the response headers.
    */
-  virtual void onUpdate(const Upstream::HostDescription& host, ResponseHeaderMap& headers) PURE;
+  virtual void onUpdate(absl::string_view host_address, ResponseHeaderMap& headers) PURE;
 };
 
 using SessionStatePtr = std::unique_ptr<SessionState>;
@@ -51,7 +51,7 @@ public:
    *
    * @param headers request headers.
    */
-  virtual SessionStatePtr create(const RequestHeaderMap& headers) const PURE;
+  virtual SessionStatePtr create(RequestHeaderMap& headers) const PURE;
 };
 
 using SessionStateFactorySharedPtr = std::shared_ptr<SessionStateFactory>;

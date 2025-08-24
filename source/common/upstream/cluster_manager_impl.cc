@@ -1798,6 +1798,9 @@ HostConstSharedPtr ClusterManagerImpl::ThreadLocalClusterManagerImpl::ClusterEnt
   if (host != nullptr) {
     return host;
   }
+  if (!HostUtility::allowLBChooseHost(context)) {
+    return nullptr;
+  }
   return lb_->chooseHost(context);
 }
 

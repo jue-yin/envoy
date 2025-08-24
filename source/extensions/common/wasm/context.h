@@ -30,11 +30,11 @@ using proxy_wasm::CloseType;
 using proxy_wasm::ContextBase;
 using proxy_wasm::Pairs;
 using proxy_wasm::PairsWithStringValues;
-using proxy_wasm::StringPairs;
 using proxy_wasm::PluginBase;
 using proxy_wasm::PluginHandleBase;
 using proxy_wasm::SharedQueueDequeueToken;
 using proxy_wasm::SharedQueueEnqueueToken;
+using proxy_wasm::StringPairs;
 using proxy_wasm::WasmBase;
 using proxy_wasm::WasmBufferType;
 using proxy_wasm::WasmHandleBase;
@@ -221,10 +221,10 @@ public:
 #if defined(HIGRESS)
   WasmResult injectEncodedDataToFilterChain(std::string_view body_text, bool end_stream) override;
   WasmResult injectEncodedDataToFilterChainOnHeader(std::string_view body_text, bool end_stream);
-  WasmResult getUpstreamHosts(StringPairs * result) override;
+  WasmResult getUpstreamHosts(StringPairs* result) override;
   WasmResult setUpstreamOverrideHost(std::string_view address) override;
 #endif
-                             
+
   void clearRouteCache() override {
 #if defined(HIGRESS)
     if (decoder_callbacks_ && !disable_clear_route_cache_) {

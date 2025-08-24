@@ -1993,7 +1993,7 @@ WasmResult Context::getUpstreamHosts(StringPairs* result) {
 }
 WasmResult Context::setUpstreamOverrideHost(std::string_view address) {
   if (decoder_callbacks_) {
-    decoder_callbacks_->setUpstreamOverrideHost(address);
+    decoder_callbacks_->setUpstreamOverrideHost(std::make_pair(address, false));
   }
   return WasmResult::Ok;
 }
